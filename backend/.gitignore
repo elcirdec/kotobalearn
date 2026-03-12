@@ -43,3 +43,7 @@ application-secret.properties
 # OS
 .DS_Store
 Thumbs.db
+
+# Fichiers de données lourds (télécharger manuellement, voir README-data.md)
+src/main/resources/data/*.xml
+src/main/resources/data/*.csv
