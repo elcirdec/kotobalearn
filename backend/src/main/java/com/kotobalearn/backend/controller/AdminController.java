@@ -1,6 +1,8 @@
 package com.kotobalearn.backend.controller;
 
 import com.kotobalearn.backend.importer.KanjiAliveImportService;
+import com.kotobalearn.backend.importer.KanjidicImportService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminController {
 
     private final KanjiAliveImportService importService;
+    private final KanjidicImportService kanjidicImportService;
 
     // POST http://localhost:8080/api/admin/import/kanjialive
     @PostMapping("/import/kanjialive")
@@ -27,5 +30,11 @@ public class AdminController {
             return ResponseEntity.internalServerError()
                 .body("Erreur : " + e.getMessage());
         }
+    }
+
+    @PostMapping("/import/kanjidic")
+    public ResponseEntity<String> importKanjidic() {
+        String result = kanjidicImportService.importAllKanji();
+        return ResponseEntity.ok(result);
     }
 }
