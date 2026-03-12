@@ -1,0 +1,1 @@
+ALTER TABLE reading ALTER COLUMN read_romaji DROP NOT NULL;
