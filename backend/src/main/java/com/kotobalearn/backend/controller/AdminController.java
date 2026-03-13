@@ -1,5 +1,6 @@
 package com.kotobalearn.backend.controller;
 
+import com.kotobalearn.backend.importer.JMdictImportService;
 import com.kotobalearn.backend.importer.KanjiAliveImportService;
 import com.kotobalearn.backend.importer.KanjidicImportService;
 
@@ -18,7 +19,8 @@ public class AdminController {
 
     private final KanjiAliveImportService importService;
     private final KanjidicImportService kanjidicImportService;
-
+    private final JMdictImportService     jmdictImportService;
+    
     // POST http://localhost:8080/api/admin/import/kanjialive
     @PostMapping("/import/kanjialive")
     public ResponseEntity<String> importKanjiAlive() {
@@ -35,6 +37,11 @@ public class AdminController {
     @PostMapping("/import/kanjidic")
     public ResponseEntity<String> importKanjidic() {
         String result = kanjidicImportService.importAllKanji();
+        return ResponseEntity.ok(result);
+    }
+    @PostMapping("/import/jmdict")
+    public ResponseEntity<String> importJMdict() {
+        String result = jmdictImportService.importWords();
         return ResponseEntity.ok(result);
     }
 }

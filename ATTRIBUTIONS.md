@@ -12,5 +12,6 @@ Source : https://github.com/kanjialive
 Les fichiers KANJIDIC2 et JMdict sont la propriété de James William Breen et du
 Electronic Dictionary Research and Development Group (EDRDG).
 Publiés sous licence Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0).
+Les données dérivées de ces fichiers sont redistribuées sous la même licence CC BY-SA 4.0.
 Source : https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project   
          https://www.edrdg.org/kanjidic/kanjd2index_legacy.html
