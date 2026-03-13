@@ -54,6 +54,14 @@ public class Word {
     )
     private List<Kanji> kanjis;
 
+    @ManyToMany
+    @JoinTable(
+        name = "word_tag",
+        joinColumns = @JoinColumn(name = "word_id"),
+        inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    private List<Tag> tags;
+
     @OneToMany(mappedBy = "word", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<WordExample> examples = new ArrayList<>();
 }
