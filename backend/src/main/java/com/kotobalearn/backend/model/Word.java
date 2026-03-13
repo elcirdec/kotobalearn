@@ -3,6 +3,8 @@ package com.kotobalearn.backend.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -51,4 +53,7 @@ public class Word {
         inverseJoinColumns = @JoinColumn(name = "kanji_id")
     )
     private List<Kanji> kanjis;
+
+    @OneToMany(mappedBy = "word", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<WordExample> examples = new ArrayList<>();
 }
