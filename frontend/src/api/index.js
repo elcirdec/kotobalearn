@@ -32,3 +32,7 @@ export const scriptsApi = {
 export const tagsApi = {
   list: () => get('/tags'),
 }
+
+export const radicalsApi = {
+  list: () => get('/radicals'),
+}

@@ -12,31 +12,119 @@
       </header>
 
       <section class="filters">
+
+        <!-- Recherche -->
         <div class="search-wrap">
           <input v-model="store.searchInput" class="search-input"
-            placeholder="Rechercher un kanji ou sa signification…"
+            placeholder="Rechercher par signification (ex: water, love…)"
             @keyup.enter="store.fetchKanji" />
           <button class="search-btn" @click="store.fetchKanji">Rechercher</button>
         </div>
 
-        <div class="filter-group">
-          <label class="filter-label">Niveau JLPT</label>
-          <div class="toggles">
-            <button :class="['toggle', { active: store.selectedJlpt === '' }]" @click="store.setJlpt('')">Tous</button>
-            <button v-for="j in ['N5','N4','N3','N2','N1']" :key="j"
-              :class="['toggle', { active: store.selectedJlpt === j }]" @click="store.setJlpt(j)">{{ j }}</button>
+        <!-- Barre de filtres -->
+        <div class="filter-bar">
+
+          <!-- JLPT -->
+          <div class="filter-unit">
+            <span class="filter-bar-label">JLPT</span>
+            <div class="toggles">
+              <button :class="['toggle', { active: store.selectedJlpt === '' }]" @click="store.setJlpt('')">Tous</button>
+              <button v-for="j in ['N5','N4','N3','N2','N1']" :key="j"
+                :class="['toggle', { active: store.selectedJlpt === j }]" @click="store.setJlpt(j)">{{ j }}</button>
+            </div>
           </div>
+
+          <div class="filter-bar-sep">·</div>
+
+          <!-- Année scolaire -->
+          <div class="filter-unit">
+            <span class="filter-bar-label">Année scolaire</span>
+            <div class="toggles">
+              <button :class="['toggle', { active: store.selectedGrade === '' }]" @click="store.setGrade('')">Toutes</button>
+              <button v-for="g in [1,2,3,4,5,6]" :key="g"
+                :class="['toggle', { active: store.selectedGrade === String(g) }]"
+                @click="store.setGrade(String(g))">{{ g }}</button>
+            </div>
+          </div>
+
+          <div class="filter-bar-sep">·</div>
+
+          <!-- Traits -->
+          <div class="filter-unit" ref="strokesRef">
+            <span class="filter-bar-label">Traits</span>
+            <div class="dropdown-wrap">
+              <button class="dropdown-btn" :class="{ active: store.selectedStrokes !== '' }"
+                @click.stop="showStrokes = !showStrokes">
+                {{ store.selectedStrokes !== '' ? store.selectedStrokes + ' trait' + (store.selectedStrokes > 1 ? 's' : '') : 'Tous' }}
+                <span class="dropdown-arrow">▼</span>
+              </button>
+              <div class="dropdown-list" v-if="showStrokes">
+                <button class="dropdown-item" :class="{ active: store.selectedStrokes === '' }"
+                  @click="pickStroke('')">Tous</button>
+                <button v-for="s in strokeOptions" :key="s"
+                  class="dropdown-item" :class="{ active: store.selectedStrokes === String(s) }"
+                  @click="pickStroke(String(s))">{{ s }} trait{{ s > 1 ? 's' : '' }}</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="filter-bar-sep">·</div>
+
+          <!-- Radical -->
+          <div class="filter-unit">
+            <span class="filter-bar-label">Radical</span>
+            <button class="dropdown-btn" :class="{ active: store.selectedRadical !== null }"
+              @click="showRadicalGrid = !showRadicalGrid">
+              <span v-if="store.selectedRadical" class="radical-btn-char">{{ store.selectedRadical.radCharacter }}</span>
+              {{ store.selectedRadical ? store.selectedRadical.radNameRomaji : 'Choisir' }}
+              <span class="dropdown-arrow">{{ showRadicalGrid ? '▲' : '▼' }}</span>
+            </button>
+          </div>
+
         </div>
 
-        <div class="filter-group">
-          <label class="filter-label">Année scolaire</label>
-          <div class="toggles">
-            <button :class="['toggle', { active: store.selectedGrade === '' }]" @click="store.setGrade('')">Toutes</button>
-            <button v-for="g in [1,2,3,4,5,6]" :key="g"
-              :class="['toggle', { active: store.selectedGrade === String(g) }]"
-              @click="store.setGrade(String(g))">{{ g }}</button>
-          </div>
+        <!-- Chips -->
+        <div class="chips" v-if="store.hasActiveFilters">
+          <span v-if="store.selectedJlpt" class="chip chip-jlpt">
+            JLPT {{ store.selectedJlpt }} <button @click="store.setJlpt('')">×</button>
+          </span>
+          <span v-if="store.selectedGrade" class="chip chip-grade">
+            Année {{ store.selectedGrade }} <button @click="store.setGrade('')">×</button>
+          </span>
+          <span v-if="store.selectedStrokes !== ''" class="chip chip-strokes">
+            {{ store.selectedStrokes }} trait{{ store.selectedStrokes > 1 ? 's' : '' }}
+            <button @click="store.setStrokes('')">×</button>
+          </span>
+          <span v-if="store.selectedRadical" class="chip chip-radical">
+            <span class="radical-chip-char">{{ store.selectedRadical.radCharacter }}</span>
+            {{ store.selectedRadical.radNameRomaji }}
+            <button @click="store.clearRadical()">×</button>
+          </span>
+          <button class="chip-reset" @click="resetAll">Tout effacer</button>
         </div>
+
+        <!-- Grille radicaux -->
+        <Transition name="collapse">
+          <div v-if="showRadicalGrid" class="radical-grid-wrap">
+            <div v-if="!store.radicalsLoaded" class="loading-sm">Chargement…</div>
+            <div v-else-if="store.radicals.length === 0" class="empty-sm">
+              Aucun radical disponible — les données seront ajoutées prochainement
+            </div>
+            <div v-else>
+              <p class="radical-hint">Cliquez sur un radical pour filtrer · Cliquez à nouveau pour désélectionner</p>
+              <div v-for="group in store.radicalsByStrokes" :key="group.strokes" class="radical-group">
+                <span class="radical-group-label">{{ group.strokes }} trait{{ group.strokes > 1 ? 's' : '' }}</span>
+                <div class="radical-row">
+                  <button v-for="r in group.list" :key="r.radId"
+                    :class="['radical-cell', { active: store.selectedRadical?.radId === r.radId }]"
+                    :title="`${r.radNameRomaji} · ${r.radMeaningEnglish}`"
+                    @click="selectRadical(r)">{{ r.radCharacter }}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
       </section>
 
       <div v-if="!store.hasSearched" class="invitation">
@@ -58,10 +146,10 @@
         </div>
         <nav class="pagination" v-if="store.totalPages > 1">
           <button @click="store.page = 0" :disabled="store.page === 0">«</button>
-          <button @click="store.page--" :disabled="store.page === 0">‹</button>
+          <button @click="store.page--"   :disabled="store.page === 0">‹</button>
           <button v-for="p in visiblePages" :key="p"
             :class="{ active: p === store.page }" @click="store.page = p">{{ p + 1 }}</button>
-          <button @click="store.page++" :disabled="store.page >= store.totalPages - 1">›</button>
+          <button @click="store.page++"   :disabled="store.page >= store.totalPages - 1">›</button>
           <button @click="store.page = store.totalPages - 1" :disabled="store.page >= store.totalPages - 1">»</button>
         </nav>
         <p class="pagination-info">
@@ -74,26 +162,50 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useKanjiStore } from '../stores/kanji'
 
 const store = useKanjiStore()
 
-// ── Au départ : flag SEULEMENT si on va sur une fiche kanji ───────────────
+const strokeOptions   = Array.from({ length: 34 }, (_, i) => i + 1)
+const showStrokes     = ref(false)
+const showRadicalGrid = ref(false)
+const strokesRef      = ref(null)
+
+function pickStroke(s) { showStrokes.value = false; store.setStrokes(s) }
+
+function selectRadical(r) {
+  store.setRadical(r)
+  // Ferme la grille si on vient de désélectionner
+  if (store.selectedRadical === null) showRadicalGrid.value = false
+}
+
+function resetAll() {
+  showStrokes.value = false; showRadicalGrid.value = false
+  store.clear()
+}
+
+function handleClickOutside(e) {
+  if (strokesRef.value && !strokesRef.value.contains(e.target)) showStrokes.value = false
+}
+
 onBeforeRouteLeave((to) => {
   store.returnFromChild = (to.name === 'kanji-detail')
 })
 
-// ── À l'arrivée ───────────────────────────────────────────────────────────
-onMounted(() => {
-  // Retour depuis fiche kanji → on restaure
+onMounted(async () => {
+  document.addEventListener('click', handleClickOutside)
+  store.loadRadicals()
   if (store.returnFromChild) {
     store.returnFromChild = false
     return
   }
-  // Toute autre arrivée → repart à zéro
   store.clear()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 
 const visiblePages = computed(() => {
@@ -114,17 +226,51 @@ function truncate(str, len = 28) {
 .page-eyebrow { font-family: var(--font-jp); font-size: 0.9rem; color: var(--vermilion); letter-spacing: 0.1em; margin-bottom: 0.5rem; }
 .page-header h1 { font-size: clamp(2rem, 4vw, 3rem); }
 .page-lead { color: var(--muted); margin-top: 0.5rem; }
-.filters { margin-bottom: 2.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
+.filters { margin-bottom: 2.5rem; display: flex; flex-direction: column; gap: 0.75rem; }
 .search-wrap { display: flex; gap: 0.75rem; }
 .search-wrap .search-input { flex: 1; }
 .search-btn { padding: 0.75rem 1.5rem; background: var(--ink); color: var(--paper); border: none; border-radius: var(--radius); font-family: var(--font-display); font-size: 0.9rem; letter-spacing: 0.06em; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
 .search-btn:hover { background: var(--vermilion); }
-.filter-group { display: flex; flex-direction: column; gap: 0.5rem; }
-.filter-label { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-.toggles { display: flex; gap: 0.5rem; flex-wrap: nowrap; overflow-x: auto; }
-.toggle { padding: 0.4rem 1.1rem; border: 1.5px solid var(--paper-mid); border-radius: 20px; background: white; font-family: var(--font-display); font-size: 0.9rem; color: var(--ink-light); cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all 0.2s ease; }
+.filter-bar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 0.75rem 1rem; background: white; border: 1px solid var(--paper-mid); border-radius: var(--radius); }
+.filter-bar-sep { color: var(--paper-mid); font-size: 1.2rem; flex-shrink: 0; }
+.filter-unit { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
+.filter-bar-label { font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.toggles { display: flex; gap: 0.35rem; }
+.toggle { padding: 0.3rem 0.85rem; border: 1.5px solid var(--paper-mid); border-radius: 20px; background: white; font-family: var(--font-display); font-size: 0.85rem; color: var(--ink-light); cursor: pointer; white-space: nowrap; transition: all 0.2s ease; }
 .toggle:hover { border-color: var(--ink); color: var(--ink); }
 .toggle.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.dropdown-wrap { position: relative; }
+.dropdown-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.9rem; border: 1.5px solid var(--paper-mid); border-radius: 20px; background: white; font-family: var(--font-display); font-size: 0.85rem; color: var(--ink-light); cursor: pointer; white-space: nowrap; transition: all 0.2s; }
+.dropdown-btn:hover { border-color: var(--ink); color: var(--ink); }
+.dropdown-btn.active { border-color: var(--vermilion); color: var(--vermilion); background: #fdf5f5; }
+.dropdown-arrow { font-size: 0.6rem; opacity: 0.6; }
+.radical-btn-char { font-family: var(--font-cjk); font-size: 1rem; color: var(--vermilion); line-height: 1; }
+.dropdown-list { position: absolute; top: calc(100% + 4px); left: 0; min-width: 140px; background: white; border: 1.5px solid var(--ink); border-radius: var(--radius); max-height: 220px; overflow-y: auto; z-index: 50; box-shadow: var(--shadow-lg); }
+.dropdown-item { display: block; width: 100%; text-align: left; padding: 0.5rem 1rem; background: none; border: none; font-family: var(--font-body); font-size: 0.875rem; color: var(--ink); cursor: pointer; transition: background 0.15s; }
+.dropdown-item:hover { background: var(--paper); }
+.dropdown-item.active { background: #fdf0ee; color: var(--vermilion); font-weight: 500; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.75rem; border-radius: 20px; font-size: 0.82rem; background: var(--paper-dark); border: 1px solid var(--paper-mid); color: var(--ink); }
+.chip button { background: none; border: none; font-size: 1rem; line-height: 1; color: var(--muted); cursor: pointer; padding: 0; transition: color 0.2s; }
+.chip button:hover { color: var(--vermilion); }
+.chip-jlpt    { background: #fdf0ee; border-color: #f0c0b8; }
+.chip-grade   { background: #e8eef8; border-color: #90aad4; }
+.chip-strokes { background: #e8f0e8; border-color: #b8d4b8; }
+.chip-radical { background: #f5f0e8; border-color: #d4c890; }
+.radical-chip-char { font-family: var(--font-cjk); font-size: 1rem; color: var(--vermilion); line-height: 1; }
+.chip-reset { background: none; border: 1px dashed var(--paper-mid); border-radius: 20px; padding: 0.3rem 0.75rem; font-size: 0.8rem; color: var(--muted); cursor: pointer; transition: all 0.2s; }
+.chip-reset:hover { border-color: var(--vermilion); color: var(--vermilion); }
+.radical-hint { font-size: 0.78rem; color: var(--muted); font-style: italic; margin-bottom: 0.75rem; }
+.radical-grid-wrap { background: white; border: 1px solid var(--paper-mid); border-radius: var(--radius); padding: 1.25rem; max-height: 360px; overflow-y: auto; }
+.radical-group { margin-bottom: 0.75rem; }
+.radical-group:last-child { margin-bottom: 0; }
+.radical-group-label { font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 0.35rem; }
+.radical-row { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.radical-cell { font-family: 'Noto Sans JP', 'Noto Sans CJK JP', sans-serif; font-size: 1.1rem; line-height: 1; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: var(--paper-dark); border: 1px solid var(--paper-mid); border-radius: var(--radius); cursor: pointer; transition: all 0.15s; color: var(--ink); }
+.radical-cell:hover { border-color: var(--vermilion); color: var(--vermilion); background: #fdf5f5; }
+.radical-cell.active { background: var(--vermilion); color: white; border-color: var(--vermilion); }
+.collapse-enter-active, .collapse-leave-active { transition: max-height 0.3s ease, opacity 0.25s ease; overflow: hidden; max-height: 400px; }
+.collapse-enter-from, .collapse-leave-to { max-height: 0; opacity: 0; }
 .invitation { text-align: center; padding: 6rem 2rem; color: var(--muted); }
 .invitation-jp { display: block; font-size: 5rem; opacity: 0.08; margin-bottom: 1.5rem; line-height: 1; }
 .invitation p { font-family: var(--font-display); font-size: 1.1rem; letter-spacing: 0.04em; line-height: 1.8; }
@@ -134,5 +280,11 @@ function truncate(str, len = 28) {
 .kanji-char { font-size: 2.5rem; line-height: 1; }
 .kanji-meaning { font-size: 0.72rem; color: var(--muted); line-height: 1.4; }
 .kanji-jlpt { position: absolute; top: 0.4rem; right: 0.4rem; font-size: 0.6rem; letter-spacing: 0.05em; background: var(--vermilion); color: white; padding: 0.1rem 0.35rem; border-radius: 2px; }
+.loading-sm { padding: 1.5rem; text-align: center; color: var(--muted); }
+.empty-sm { padding: 1rem; color: var(--muted); font-style: italic; }
 .pagination-info { text-align: center; margin-top: 1rem; color: var(--muted); font-size: 0.85rem; }
+@media (max-width: 768px) {
+  .filter-bar { flex-direction: column; align-items: flex-start; }
+  .filter-bar-sep { display: none; }
+}
 </style>

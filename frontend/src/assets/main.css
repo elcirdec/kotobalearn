@@ -13,8 +13,10 @@
   --muted:      #8c8078;
 
   --font-display: 'Cormorant Garamond', 'Noto Serif JP', Georgia, serif;
-  --font-jp:      'Noto Serif JP', serif;
-  --font-body:    'Noto Sans JP', sans-serif;
+  --font-jp:      'Noto Serif JP', 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'MS Gothic', 'Meiryo', serif;
+  --font-body:    'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'MS Gothic', 'Meiryo', sans-serif;
+  /* Polices CJK complètes pour les radicaux Kangxi (U+2F00–U+2FD5) */
+  --font-cjk:     'Noto Sans JP', 'Noto Sans CJK JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'MS Gothic', 'Meiryo', 'SimHei', sans-serif;
 
   --radius:     4px;
   --shadow:     0 2px 12px rgba(26,22,18,0.08);
