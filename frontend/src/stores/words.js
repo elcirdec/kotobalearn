@@ -11,15 +11,13 @@ export const useWordsStore = defineStore('words', () => {
   const loading     = ref(false)
   const error       = ref(null)
 
-  const search     = ref('')
-  const jlpt       = ref('')
-  const activeTags = ref([])
+  const search      = ref('')
+  const jlpt        = ref('')
+  const activeTags  = ref([])
+  const tagMode     = ref('or')
 
-  const availableTags = ref({ field: [], pos: [], misc: [], dial: [] })
-  const tagsLoaded    = ref(false)
-
-  // Vrai uniquement quand on navigue vers /mots/:id
-  // Remis à false dès qu'on revient sur WordsView
+  const availableTags   = ref({ field: [], pos: [], misc: [], dial: [] })
+  const tagsLoaded      = ref(false)
   const returnFromChild = ref(false)
 
   async function loadTags() {
@@ -45,8 +43,10 @@ export const useWordsStore = defineStore('words', () => {
       const params = { page: page.value, size: size.value }
       if (search.value) params.search = search.value
       if (jlpt.value)   params.jlpt   = jlpt.value
-      if (activeTags.value.length > 0) params.tag = activeTags.value[0].tagCode
-
+      if (activeTags.value.length > 0) {
+        params.tags    = activeTags.value.map(t => t.tagCode).join(',')
+        params.tagMode = tagMode.value
+      }
       const data = await wordsApi.list(params)
       words.value      = data.content ?? []
       total.value      = data.totalElements ?? 0
@@ -58,34 +58,25 @@ export const useWordsStore = defineStore('words', () => {
     }
   }
 
-  function setPage(p)   { page.value = p; fetchWords() }
-  function setSearch(s) { search.value = s; page.value = 0; fetchWords() }
-  function setJlpt(j)   { jlpt.value = j; page.value = 0; fetchWords() }
+  function setPage(p)    { page.value = p; fetchWords() }
+  function setSearch(s)  { search.value = s; page.value = 0; fetchWords() }
+  function setJlpt(j)    { jlpt.value = j; page.value = 0; fetchWords() }
+  function setTagMode(m) { tagMode.value = m; if (activeTags.value.length > 0) { page.value = 0; fetchWords() } }
 
   function addTag(tag) {
     if (!activeTags.value.find(t => t.tagCode === tag.tagCode)) {
-      activeTags.value.push(tag)
-      page.value = 0
-      fetchWords()
+      activeTags.value.push(tag); page.value = 0; fetchWords()
     }
   }
 
   function removeTag(tagCode) {
     activeTags.value = activeTags.value.filter(t => t.tagCode !== tagCode)
-    page.value = 0
-    fetchWords()
+    page.value = 0; fetchWords()
   }
 
-  // Remet tout à zéro sans déclencher de fetch
   function clear() {
     words.value = []; total.value = 0; totalPages.value = 0; page.value = 0
-    search.value = ''; jlpt.value = ''; activeTags.value = []
-  }
-
-  // Reset complet avec fetch (bouton "Tout effacer")
-  function reset() {
-    clear()
-    fetchWords()
+    search.value = ''; jlpt.value = ''; activeTags.value = []; tagMode.value = 'or'
   }
 
   const hasFilters = computed(() =>
@@ -94,9 +85,9 @@ export const useWordsStore = defineStore('words', () => {
 
   return {
     words, total, totalPages, page, size, loading, error,
-    search, jlpt, activeTags, availableTags, hasFilters,
+    search, jlpt, activeTags, tagMode, availableTags, hasFilters,
     returnFromChild,
-    loadTags, fetchWords, setPage, setSearch, setJlpt,
-    addTag, removeTag, reset, clear
+    loadTags, fetchWords, setPage, setSearch, setJlpt, setTagMode,
+    addTag, removeTag, clear
   }
 })

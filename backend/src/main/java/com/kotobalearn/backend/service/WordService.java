@@ -23,24 +23,42 @@ public class WordService {
 
     private final WordRepository wordRepository;
 
-    public Page<WordSummaryDto> findAll(String jlpt, String tag, String tagType,
-                                        String search, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("wordId"));
+    /**
+     * Recherche principale.
+     * La recherche textuelle est automatiquement rankée :
+     *   exact > commence par > contient (japonais puis anglais)
+     */
+    public Page<WordSummaryDto> findAll(
+        String jlpt, List<String> tags, String tagMode,
+        String search, int page, int size
+    ) {
+        // On ignore le tri par wordId pour la recherche (le rank prime)
+        Pageable paginatedOnly  = PageRequest.of(page, size);
+        Pageable sortedByWordId = PageRequest.of(page, size, Sort.by("wordId"));
+
+        boolean hasJlpt   = jlpt   != null && !jlpt.isBlank();
+        boolean hasTags   = tags   != null && !tags.isEmpty();
+        boolean hasSearch = search != null && !search.isBlank();
+        boolean isAnd     = "and".equalsIgnoreCase(tagMode);
 
         Page<Word> words;
 
-        if (search != null && !search.isBlank() && jlpt != null && !jlpt.isBlank()) {
-            words = wordRepository.searchByJlpt(jlpt, "%" + search + "%", pageable);
-        } else if (search != null && !search.isBlank()) {
-            words = wordRepository.search("%" + search + "%", pageable);
-        } else if (jlpt != null && !jlpt.isBlank()) {
-            words = wordRepository.findByJlpt(jlpt, pageable);
-        } else if (tag != null && !tag.isBlank()) {
-            words = wordRepository.findByTagCode(tag, pageable);
-        } else if (tagType != null && !tagType.isBlank()) {
-            words = wordRepository.findByTagType(tagType, pageable);
+        if (hasTags && hasJlpt) {
+            words = isAnd
+                ? wordRepository.findByTagsAndAndJlpt(tags, jlpt, (long) tags.size(), sortedByWordId)
+                : wordRepository.findByTagsOrAndJlpt(tags, jlpt, sortedByWordId);
+        } else if (hasTags) {
+            words = isAnd
+                ? wordRepository.findByTagsAnd(tags, (long) tags.size(), sortedByWordId)
+                : wordRepository.findByTagsOr(tags, sortedByWordId);
+        } else if (hasSearch && hasJlpt) {
+            words = wordRepository.searchRankedByJlpt(jlpt, search, search.toLowerCase(), paginatedOnly);
+        } else if (hasSearch) {
+            words = wordRepository.searchRanked(search, search.toLowerCase(), paginatedOnly);
+        } else if (hasJlpt) {
+            words = wordRepository.findByJlpt(jlpt, sortedByWordId);
         } else {
-            words = wordRepository.findAll(pageable);
+            words = wordRepository.findAll(sortedByWordId);
         }
 
         return words.map(this::toSummary);
@@ -51,8 +69,6 @@ public class WordService {
             .orElseThrow(() -> new IllegalArgumentException("Mot introuvable : " + id));
         return toDetail(word);
     }
-
-    // ─── Mapping ─────────────────────────────────────────────────────────────
 
     private WordSummaryDto toSummary(Word w) {
         return new WordSummaryDto(
@@ -66,26 +82,15 @@ public class WordService {
     private WordDetailDto toDetail(Word w) {
         List<TagDto> tags = w.getTags() == null ? List.of() :
             w.getTags().stream().map(TagDto::from).toList();
-
         List<ExampleDto> examples = w.getExamples() == null ? List.of() :
             w.getExamples().stream()
-                .map(e -> new ExampleDto(
-                    e.getWeJapanese(),
-                    e.getWeEnglish(),
-                    e.getWeTatoebaId(),
-                    e.getWeForm()
-                ))
+                .map(e -> new ExampleDto(e.getWeJapanese(), e.getWeEnglish(), e.getWeTatoebaId(), e.getWeForm()))
                 .toList();
-
         return new WordDetailDto(
-            w.getWordId(),
-            w.getWordJapanese(),
-            w.getWordPronunciationHiragana(),
-            w.getWordTranslationEn(),
-            w.getWordTranslationFr(),
+            w.getWordId(), w.getWordJapanese(), w.getWordPronunciationHiragana(),
+            w.getWordTranslationEn(), w.getWordTranslationFr(),
             w.getJlptLevel() != null ? w.getJlptLevel().getJlptCode() : null,
-            tags,
-            examples
+            tags, examples
         );
     }
 }
