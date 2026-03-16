@@ -55,7 +55,7 @@ public class KanjiService {
         }
 
         if (hasSearch) {
-            String q = search.toLowerCase();
+            String q = search != null ? search.toLowerCase() : "";
 
             Stream<Kanji> source;
             if (!base.isEmpty() || hasRadicals || hasStrokes || hasJlpt || hasGrade) {

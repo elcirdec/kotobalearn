@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -41,20 +42,24 @@ public class WordService {
         boolean hasSearch = search != null && !search.isBlank();
         boolean isAnd     = "and".equalsIgnoreCase(tagMode);
 
+        List<String> safeTags = Objects.requireNonNullElse(tags, List.of());
+        String safeSearch = Objects.requireNonNullElse(search, "");
+        String searchLower = safeSearch.toLowerCase();
+
         Page<Word> words;
 
         if (hasTags && hasJlpt) {
             words = isAnd
-                ? wordRepository.findByTagsAndAndJlpt(tags, jlpt, (long) tags.size(), sortedByWordId)
-                : wordRepository.findByTagsOrAndJlpt(tags, jlpt, sortedByWordId);
+                ? wordRepository.findByTagsAndAndJlpt(safeTags, jlpt, (long) safeTags.size(), sortedByWordId)
+                : wordRepository.findByTagsOrAndJlpt(safeTags, jlpt, sortedByWordId);
         } else if (hasTags) {
             words = isAnd
-                ? wordRepository.findByTagsAnd(tags, (long) tags.size(), sortedByWordId)
-                : wordRepository.findByTagsOr(tags, sortedByWordId);
+                ? wordRepository.findByTagsAnd(safeTags, (long) safeTags.size(), sortedByWordId)
+                : wordRepository.findByTagsOr(safeTags, sortedByWordId);
         } else if (hasSearch && hasJlpt) {
-            words = wordRepository.searchRankedByJlpt(jlpt, search, search.toLowerCase(), paginatedOnly);
+            words = wordRepository.searchRankedByJlpt(jlpt, safeSearch, searchLower, paginatedOnly);
         } else if (hasSearch) {
-            words = wordRepository.searchRanked(search, search.toLowerCase(), paginatedOnly);
+            words = wordRepository.searchRanked(safeSearch, searchLower, paginatedOnly);
         } else if (hasJlpt) {
             words = wordRepository.findByJlpt(jlpt, sortedByWordId);
         } else {
