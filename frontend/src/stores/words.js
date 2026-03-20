@@ -15,6 +15,7 @@ export const useWordsStore = defineStore('words', () => {
   const jlpt        = ref('')
   const activeTags  = ref([])
   const tagMode     = ref('or')
+  const sortBy      = ref('relevance') // 'relevance' | 'frequency'
 
   const availableTags   = ref({ field: [], pos: [], misc: [], dial: [] })
   const tagsLoaded      = ref(false)
@@ -40,7 +41,7 @@ export const useWordsStore = defineStore('words', () => {
     loading.value = true
     error.value   = null
     try {
-      const params = { page: page.value, size: size.value }
+      const params = { page: page.value, size: size.value, sortBy: sortBy.value }
       if (search.value) params.search = search.value
       if (jlpt.value)   params.jlpt   = jlpt.value
       if (activeTags.value.length > 0) {
@@ -58,10 +59,11 @@ export const useWordsStore = defineStore('words', () => {
     }
   }
 
-  function setPage(p)    { page.value = p; fetchWords() }
-  function setSearch(s)  { search.value = s; page.value = 0; fetchWords() }
-  function setJlpt(j)    { jlpt.value = j; page.value = 0; fetchWords() }
-  function setTagMode(m) { tagMode.value = m; if (activeTags.value.length > 0) { page.value = 0; fetchWords() } }
+  function setPage(p)     { page.value = p; fetchWords() }
+  function setSearch(s)   { search.value = s; page.value = 0; fetchWords() }
+  function setJlpt(j)     { jlpt.value = j; page.value = 0; fetchWords() }
+  function setSortBy(s)   { sortBy.value = s; page.value = 0; fetchWords() }
+  function setTagMode(m)  { tagMode.value = m; if (activeTags.value.length > 0) { page.value = 0; fetchWords() } }
 
   function addTag(tag) {
     if (!activeTags.value.find(t => t.tagCode === tag.tagCode)) {
@@ -76,7 +78,8 @@ export const useWordsStore = defineStore('words', () => {
 
   function clear() {
     words.value = []; total.value = 0; totalPages.value = 0; page.value = 0
-    search.value = ''; jlpt.value = ''; activeTags.value = []; tagMode.value = 'or'
+    search.value = ''; jlpt.value = ''; activeTags.value = []
+    tagMode.value = 'or'; sortBy.value = 'relevance'
   }
 
   const hasFilters = computed(() =>
@@ -85,9 +88,9 @@ export const useWordsStore = defineStore('words', () => {
 
   return {
     words, total, totalPages, page, size, loading, error,
-    search, jlpt, activeTags, tagMode, availableTags, hasFilters,
+    search, jlpt, activeTags, tagMode, sortBy, availableTags, hasFilters,
     returnFromChild,
-    loadTags, fetchWords, setPage, setSearch, setJlpt, setTagMode,
+    loadTags, fetchWords, setPage, setSearch, setJlpt, setSortBy, setTagMode,
     addTag, removeTag, clear
   }
 })

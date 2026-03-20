@@ -16,15 +16,7 @@ public interface WordRepository extends JpaRepository<Word, Integer> {
     @Query("SELECT w FROM Word w WHERE w.jlptLevel.jlptCode = :jlpt")
     Page<Word> findByJlpt(@Param("jlpt") String jlpt, Pageable pageable);
 
-    // ── Recherche rankée + tri par longueur ───────────────────────────────
-    // Rang :  1 = exact JP
-    //         2 = commence par JP
-    //         3 = exact EN
-    //         4 = commence par EN
-    //         5 = contient JP
-    //         6 = contient EN
-    // Tri secondaire : LEAST(length) → le plus court remonte en premier
-    // à rang égal, puis word_id pour la stabilité
+    // ── Recherche rankée par pertinence (exact > commence par > contient) ─
     @Query(
         value = """
             SELECT * FROM word
@@ -33,12 +25,12 @@ public interface WordRepository extends JpaRepository<Word, Integer> {
                OR word_translation_en         ILIKE '%' || :q || '%'
             ORDER BY
               CASE
-                WHEN word_japanese = :q                              THEN 1
-                WHEN word_japanese ILIKE :q || '%'                  THEN 2
-                WHEN LOWER(word_translation_en) = :qs               THEN 3
-                WHEN word_translation_en ILIKE :q || '%'            THEN 4
-                WHEN word_japanese ILIKE '%' || :q || '%'           THEN 5
-                WHEN word_translation_en ILIKE '%' || :q || '%'     THEN 6
+                WHEN word_japanese = :q                             THEN 1
+                WHEN word_japanese ILIKE :q || '%'                 THEN 2
+                WHEN LOWER(word_translation_en) = :qs              THEN 3
+                WHEN word_translation_en ILIKE :q || '%'           THEN 4
+                WHEN word_japanese ILIKE '%' || :q || '%'          THEN 5
+                WHEN word_translation_en ILIKE '%' || :q || '%'    THEN 6
                 ELSE 7
               END,
               LEAST(
@@ -67,12 +59,12 @@ public interface WordRepository extends JpaRepository<Word, Integer> {
                 OR w.word_translation_en         ILIKE '%' || :q || '%')
             ORDER BY
               CASE
-                WHEN w.word_japanese = :q                              THEN 1
-                WHEN w.word_japanese ILIKE :q || '%'                  THEN 2
-                WHEN LOWER(w.word_translation_en) = :qs               THEN 3
-                WHEN w.word_translation_en ILIKE :q || '%'            THEN 4
-                WHEN w.word_japanese ILIKE '%' || :q || '%'           THEN 5
-                WHEN w.word_translation_en ILIKE '%' || :q || '%'     THEN 6
+                WHEN w.word_japanese = :q                             THEN 1
+                WHEN w.word_japanese ILIKE :q || '%'                 THEN 2
+                WHEN LOWER(w.word_translation_en) = :qs              THEN 3
+                WHEN w.word_translation_en ILIKE :q || '%'           THEN 4
+                WHEN w.word_japanese ILIKE '%' || :q || '%'          THEN 5
+                WHEN w.word_translation_en ILIKE '%' || :q || '%'    THEN 6
                 ELSE 7
               END,
               LEAST(
@@ -92,6 +84,63 @@ public interface WordRepository extends JpaRepository<Word, Integer> {
         nativeQuery = true
     )
     Page<Word> searchRankedByJlpt(@Param("jlpt") String jlpt, @Param("q") String q, @Param("qs") String qs, Pageable pageable);
+
+    // ── Recherche triée par fréquence (les plus courants en premier) ───────
+    @Query(
+        value = """
+            SELECT * FROM word
+            WHERE word_japanese               ILIKE '%' || :q || '%'
+               OR word_pronunciation_hiragana ILIKE '%' || :q || '%'
+               OR word_translation_en         ILIKE '%' || :q || '%'
+            ORDER BY
+              word_frequency_rank NULLS LAST,
+              CASE
+                WHEN word_japanese = :q                             THEN 1
+                WHEN word_japanese ILIKE :q || '%'                 THEN 2
+                WHEN LOWER(word_translation_en) = :qs              THEN 3
+                ELSE 4
+              END,
+              word_id
+            """,
+        countQuery = """
+            SELECT COUNT(*) FROM word
+            WHERE word_japanese               ILIKE '%' || :q || '%'
+               OR word_pronunciation_hiragana ILIKE '%' || :q || '%'
+               OR word_translation_en         ILIKE '%' || :q || '%'
+            """,
+        nativeQuery = true
+    )
+    Page<Word> searchByFrequency(@Param("q") String q, @Param("qs") String qs, Pageable pageable);
+
+    @Query(
+        value = """
+            SELECT w.* FROM word w
+            JOIN jlpt_level j ON w.word_jlpt_id = j.jlpt_id
+            WHERE j.jlpt_code = :jlpt
+              AND (w.word_japanese               ILIKE '%' || :q || '%'
+                OR w.word_pronunciation_hiragana ILIKE '%' || :q || '%'
+                OR w.word_translation_en         ILIKE '%' || :q || '%')
+            ORDER BY
+              w.word_frequency_rank NULLS LAST,
+              CASE
+                WHEN w.word_japanese = :q                             THEN 1
+                WHEN w.word_japanese ILIKE :q || '%'                 THEN 2
+                WHEN LOWER(w.word_translation_en) = :qs              THEN 3
+                ELSE 4
+              END,
+              w.word_id
+            """,
+        countQuery = """
+            SELECT COUNT(*) FROM word w
+            JOIN jlpt_level j ON w.word_jlpt_id = j.jlpt_id
+            WHERE j.jlpt_code = :jlpt
+              AND (w.word_japanese               ILIKE '%' || :q || '%'
+                OR w.word_pronunciation_hiragana ILIKE '%' || :q || '%'
+                OR w.word_translation_en         ILIKE '%' || :q || '%')
+            """,
+        nativeQuery = true
+    )
+    Page<Word> searchByFrequencyAndJlpt(@Param("jlpt") String jlpt, @Param("q") String q, @Param("qs") String qs, Pageable pageable);
 
     // ── Multi-tags OR ──────────────────────────────────────────────────────
     @Query("SELECT DISTINCT w FROM Word w JOIN w.tags t WHERE t.tagCode IN :tagCodes")

@@ -33,8 +33,7 @@
               <div class="dropdown-list" v-if="openDropdown === 'field'">
                 <input v-model="fieldSearch" class="dropdown-search" placeholder="Filtrer…" @click.stop />
                 <button v-for="t in filteredTags('field', fieldSearch)" :key="t.tagCode"
-                  @click.stop="selectTag(t, 'field')"
-                  class="dropdown-item" :class="{ active: isTagActive(t.tagCode) }">
+                  @click.stop="selectTag(t)" class="dropdown-item" :class="{ active: isTagActive(t.tagCode) }">
                   <span class="check">{{ isTagActive(t.tagCode) ? '✓' : '' }}</span>{{ t.tagLabel }}
                 </button>
               </div>
@@ -54,8 +53,7 @@
               <div class="dropdown-list" v-if="openDropdown === 'pos'">
                 <input v-model="posSearch" class="dropdown-search" placeholder="Filtrer…" @click.stop />
                 <button v-for="t in filteredTags('pos', posSearch)" :key="t.tagCode"
-                  @click.stop="selectTag(t, 'pos')"
-                  class="dropdown-item" :class="{ active: isTagActive(t.tagCode) }">
+                  @click.stop="selectTag(t)" class="dropdown-item" :class="{ active: isTagActive(t.tagCode) }">
                   <span class="check">{{ isTagActive(t.tagCode) ? '✓' : '' }}</span>{{ t.tagLabel }}
                 </button>
               </div>
@@ -75,8 +73,7 @@
               <div class="dropdown-list" v-if="openDropdown === 'misc'">
                 <input v-model="miscSearch" class="dropdown-search" placeholder="Filtrer…" @click.stop />
                 <button v-for="t in filteredTags('misc', miscSearch)" :key="t.tagCode"
-                  @click.stop="selectTag(t, 'misc')"
-                  class="dropdown-item" :class="{ active: isTagActive(t.tagCode) }">
+                  @click.stop="selectTag(t)" class="dropdown-item" :class="{ active: isTagActive(t.tagCode) }">
                   <span class="check">{{ isTagActive(t.tagCode) ? '✓' : '' }}</span>{{ t.tagLabel }}
                 </button>
               </div>
@@ -96,8 +93,7 @@
               <div class="dropdown-list" v-if="openDropdown === 'dial'">
                 <input v-model="dialSearch" class="dropdown-search" placeholder="Filtrer…" @click.stop />
                 <button v-for="t in filteredTags('dial', dialSearch)" :key="t.tagCode"
-                  @click.stop="selectTag(t, 'dial')"
-                  class="dropdown-item" :class="{ active: isTagActive(t.tagCode) }">
+                  @click.stop="selectTag(t)" class="dropdown-item" :class="{ active: isTagActive(t.tagCode) }">
                   <span class="check">{{ isTagActive(t.tagCode) ? '✓' : '' }}</span>{{ t.tagLabel }}
                 </button>
               </div>
@@ -106,8 +102,9 @@
 
         </div>
 
-        <!-- Ligne 2 : JLPT -->
+        <!-- Ligne 2 : JLPT + tri -->
         <div class="filter-bar">
+
           <div class="filter-unit">
             <span class="filter-bar-label">JLPT</span>
             <div class="toggles">
@@ -116,6 +113,27 @@
                 :class="['toggle', { active: store.jlpt === j }]" @click="setJlpt(j)">{{ j }}</button>
             </div>
           </div>
+
+          <div class="filter-bar-sep">·</div>
+
+          <!-- Tri fréquence / pertinence -->
+          <div class="filter-unit">
+            <span class="filter-bar-label">Trier par</span>
+            <div class="toggles">
+              <button :class="['toggle', { active: store.sortBy === 'relevance' }]"
+                @click="store.setSortBy('relevance')"
+                title="Résultats les plus pertinents en premier">
+                Pertinence
+              </button>
+              <button :class="['toggle', 'toggle-freq', { active: store.sortBy === 'frequency' }]"
+                @click="store.setSortBy('frequency')"
+                :disabled="!store.hasFilters && !store.search"
+                :title="frequencyButtonTitle">
+                Fréquence
+              </button>
+            </div>
+          </div>
+
         </div>
 
         <!-- Chips -->
@@ -160,7 +178,7 @@
             :to="`/mots/${word.wordId}`" class="word-card">
             <span class="word-jp jp">{{ word.wordJapanese }}</span>
             <span class="word-reading">{{ word.wordReading }}</span>
-            <span class="word-en">{{ truncate(word.wordTranslationEn) }}</span>
+            <span class="word-en" v-html="highlight(word.wordTranslationEn, store.search)"></span>
           </RouterLink>
         </div>
         <nav class="pagination">
@@ -189,7 +207,7 @@ const store = useWordsStore()
 const route = useRoute()
 
 const searchInput  = ref('')
-const openDropdown = ref(null) // 'field' | 'pos' | 'misc' | 'dial' | null
+const openDropdown = ref(null)
 
 const fieldSearch = ref(''); const fieldRef = ref(null)
 const posSearch   = ref(''); const posRef   = ref(null)
@@ -198,7 +216,6 @@ const dialSearch  = ref(''); const dialRef  = ref(null)
 
 const hasSearched = computed(() => store.words.length > 0 || store.hasFilters)
 
-// ── Dropdown : un seul ouvert à la fois, se ferme via click dehors ────────
 function toggleDropdown(type) {
   openDropdown.value = openDropdown.value === type ? null : type
 }
@@ -211,25 +228,17 @@ function handleClickOutside(e) {
   }
 }
 
-// ── Tags ──────────────────────────────────────────────────────────────────
 function filteredTags(type, q) {
   const list = store.availableTags[type] ?? []
   if (!q) return list
   return list.filter(t => t.tagLabel.toLowerCase().includes(q.toLowerCase()))
 }
 
-function selectTag(tag, type) {
-  store.addTag(tag)
-  // Ferme le dropdown après sélection — mais reste ouvert pour permettre
-  // plusieurs sélections dans le même type (on rouvre au prochain clic)
-  // Si on veut fermer immédiatement, décommenter la ligne suivante :
-  // openDropdown.value = null
-}
-
-function isTagActive(code)      { return store.activeTags.some(t => t.tagCode === code) }
-function hasTagOfType(type)     { return store.activeTags.some(t => t.tagType === type) }
-function countTagOfType(type)   { return store.activeTags.filter(t => t.tagType === type).length }
-function typeLabel(type)        { return { field: 'Thème', pos: 'Nature', misc: 'Registre', dial: 'Dialecte' }[type] || type }
+function selectTag(tag) { store.addTag(tag) }
+function isTagActive(code)    { return store.activeTags.some(t => t.tagCode === code) }
+function hasTagOfType(type)   { return store.activeTags.some(t => t.tagType === type) }
+function countTagOfType(type) { return store.activeTags.filter(t => t.tagType === type).length }
+function typeLabel(type)      { return { field: 'Thème', pos: 'Nature', misc: 'Registre', dial: 'Dialecte' }[type] || type }
 
 function setJlpt(j)    { store.setJlpt(j) }
 function doSearch()    { store.setSearch(searchInput.value) }
@@ -279,6 +288,20 @@ function truncate(str, len = 60) {
   if (!str) return ''
   return str.length > len ? str.slice(0, len) + '…' : str
 }
+
+function highlight(text, term) {
+  if (!term || !text) return text
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(${escaped})`, 'gi')
+  return text.replace(regex, '<mark>$1</mark>')
+}
+
+const frequencyButtonTitle = computed(() => {
+  if (!store.hasFilters && !store.search) {
+    return "Effectuez d'abord une recherche pour trier par fréquence"
+  }
+  return "Mots les plus courants en japonais en premier"
+})
 </script>
 
 <style scoped>
@@ -303,6 +326,9 @@ function truncate(str, len = 60) {
 .toggle:hover { border-color: var(--ink); color: var(--ink); }
 .toggle.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .toggle-sm { padding: 0.25rem 0.7rem; font-size: 0.78rem; }
+/* Bouton fréquence : couleur distincte quand actif */
+.toggle-freq.active { background: var(--gold, #b8860b); border-color: var(--gold, #b8860b); color: white; }
+.toggle:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .dropdown-wrap { position: relative; }
 .dropdown-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.9rem; border: 1.5px solid var(--paper-mid); border-radius: 20px; background: white; font-family: var(--font-display); font-size: 0.85rem; color: var(--ink-light); cursor: pointer; white-space: nowrap; transition: all 0.2s; }
@@ -341,6 +367,13 @@ function truncate(str, len = 60) {
 .word-jp { font-size: 1.6rem; font-weight: 400; line-height: 1.2; }
 .word-reading { font-size: 0.8rem; color: var(--muted); letter-spacing: 0.04em; }
 .word-en { font-size: 0.85rem; color: var(--ink-light); line-height: 1.5; margin-top: 0.25rem; }
+:deep(.word-en) mark {
+  background-color: #e37c70;
+  color: var(--ink);
+  font-weight: bold;
+  border-radius: 3px;          
+  padding: 0.05rem;
+}
 .pagination-info { text-align: center; margin-top: 1rem; color: var(--muted); font-size: 0.85rem; }
 
 @media (max-width: 768px) {

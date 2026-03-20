@@ -18,22 +18,26 @@ public class WordController {
     private final WordService wordService;
 
     /**
-     * GET /api/words?search=cat          → ranké : exact > commence par > contient
-     * GET /api/words?jlpt=N5
+     * GET /api/words?search=cat
+     * GET /api/words?search=cat&sortBy=frequency   ← les plus courants en premier
+     * GET /api/words?jlpt=N5&sortBy=frequency
      * GET /api/words?tags=food,n&tagMode=and
      * GET /api/words?page=0&size=20
+     *
+     * sortBy : "relevance" (défaut) | "frequency"
      */
     @GetMapping
     public ResponseEntity<Page<WordSummaryDto>> getWords(
-        @RequestParam(required = false)    String       jlpt,
-        @RequestParam(required = false)    List<String> tags,
-        @RequestParam(defaultValue = "or") String       tagMode,
-        @RequestParam(required = false)    String       search,
-        @RequestParam(defaultValue = "0")  int          page,
-        @RequestParam(defaultValue = "20") int          size
+        @RequestParam(required = false)           String       jlpt,
+        @RequestParam(required = false)           List<String> tags,
+        @RequestParam(defaultValue = "or")        String       tagMode,
+        @RequestParam(required = false)           String       search,
+        @RequestParam(defaultValue = "relevance") String       sortBy,
+        @RequestParam(defaultValue = "0")         int          page,
+        @RequestParam(defaultValue = "20")        int          size
     ) {
         return ResponseEntity.ok(
-            wordService.findAll(jlpt, tags, tagMode, search, page, size)
+            wordService.findAll(jlpt, tags, tagMode, search, sortBy, page, size)
         );
     }
 

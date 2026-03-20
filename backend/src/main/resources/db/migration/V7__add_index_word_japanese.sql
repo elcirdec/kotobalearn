@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_word_japanese ON word(word_japanese);

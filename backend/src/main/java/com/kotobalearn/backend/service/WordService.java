@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -25,45 +24,64 @@ public class WordService {
     private final WordRepository wordRepository;
 
     /**
-     * Recherche principale.
-     * La recherche textuelle est automatiquement rankée :
-     *   exact > commence par > contient (japonais puis anglais)
+     * @param sortBy  "relevance" (défaut) ou "frequency"
+     *                relevance  → pertinence textuelle (exact > commence > contient)
+     *                frequency  → mots les plus courants en premier (word_frequency_rank)
      */
     public Page<WordSummaryDto> findAll(
         String jlpt, List<String> tags, String tagMode,
-        String search, int page, int size
+        String search, String sortBy,
+        int page, int size
     ) {
-        // On ignore le tri par wordId pour la recherche (le rank prime)
-        Pageable paginatedOnly  = PageRequest.of(page, size);
-        Pageable sortedByWordId = PageRequest.of(page, size, Sort.by("wordId"));
+        // Valeurs sécurisées (jamais null)
+    List<String> safeTags = tags == null ? List.of() : tags;
+    String safeSearch = search == null ? "" : search;
+    String searchLower = safeSearch.toLowerCase();
 
-        boolean hasJlpt   = jlpt   != null && !jlpt.isBlank();
-        boolean hasTags   = tags   != null && !tags.isEmpty();
-        boolean hasSearch = search != null && !search.isBlank();
-        boolean isAnd     = "and".equalsIgnoreCase(tagMode);
+    boolean hasJlpt   = jlpt   != null && !jlpt.isBlank();
+    boolean hasTags   = !safeTags.isEmpty();
+    boolean hasSearch = !safeSearch.isBlank();
+    boolean isAnd     = "and".equalsIgnoreCase(tagMode);
+    boolean byFreq    = "frequency".equalsIgnoreCase(sortBy);
 
-        List<String> safeTags = Objects.requireNonNullElse(tags, List.of());
-        String safeSearch = Objects.requireNonNullElse(search, "");
-        String searchLower = safeSearch.toLowerCase();
+        // Pageables
+        Pageable byWordId   = PageRequest.of(page, size, Sort.by("wordId"));
+        Pageable byFreqSort = PageRequest.of(page, size,
+            Sort.by(Sort.Order.asc("wordFrequencyRank").nullsLast(),
+                    Sort.Order.asc("wordId")));
+        Pageable noSort     = PageRequest.of(page, size); // pour les native queries (tri dans SQL)
 
         Page<Word> words;
 
         if (hasTags && hasJlpt) {
+            Pageable p = byFreq ? byFreqSort : byWordId;
             words = isAnd
-                ? wordRepository.findByTagsAndAndJlpt(safeTags, jlpt, (long) safeTags.size(), sortedByWordId)
-                : wordRepository.findByTagsOrAndJlpt(safeTags, jlpt, sortedByWordId);
+                ? wordRepository.findByTagsAndAndJlpt(safeTags, jlpt, (long) safeTags.size(), p)
+                : wordRepository.findByTagsOrAndJlpt(safeTags, jlpt, p);
+
         } else if (hasTags) {
+            Pageable p = byFreq ? byFreqSort : byWordId;
             words = isAnd
-                ? wordRepository.findByTagsAnd(safeTags, (long) safeTags.size(), sortedByWordId)
-                : wordRepository.findByTagsOr(safeTags, sortedByWordId);
+                ? wordRepository.findByTagsAnd(safeTags, (long) safeTags.size(), p)
+                : wordRepository.findByTagsOr(safeTags, p);
+
         } else if (hasSearch && hasJlpt) {
-            words = wordRepository.searchRankedByJlpt(jlpt, safeSearch, searchLower, paginatedOnly);
+            words = byFreq
+                ? wordRepository.searchByFrequencyAndJlpt(jlpt, safeSearch, searchLower, noSort)
+                : wordRepository.searchRankedByJlpt(jlpt, safeSearch, searchLower, noSort);
+
         } else if (hasSearch) {
-            words = wordRepository.searchRanked(safeSearch, searchLower, paginatedOnly);
+            words = byFreq
+                ? wordRepository.searchByFrequency(safeSearch, searchLower, noSort)
+                : wordRepository.searchRanked(safeSearch, searchLower, noSort);
+
         } else if (hasJlpt) {
-            words = wordRepository.findByJlpt(jlpt, sortedByWordId);
+            Pageable p = byFreq ? byFreqSort : byWordId;
+            words = wordRepository.findByJlpt(jlpt, p);
+
         } else {
-            words = wordRepository.findAll(sortedByWordId);
+            Pageable p = byFreq ? byFreqSort : byWordId;
+            words = wordRepository.findAll(p);
         }
 
         return words.map(this::toSummary);
