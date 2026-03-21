@@ -14,13 +14,27 @@ public interface KanjiRepository extends JpaRepository<Kanji, Integer> {
     List<Kanji> findByKanjiGrade(Integer grade);
     List<Kanji> findByJlptLevel_JlptCode(String jlptCode);
     List<Kanji> findByKanjiStrokes(Integer strokes);
-
-    // ── Recherche texte ────────────────────────────────────────────────────
     List<Kanji> findByKanjiMeaningEnglishContainingIgnoreCase(String meaning);
 
-    // ── Multi-radicaux (IN) ────────────────────────────────────────────────
+    // ── Recherche par radical principal (rad_id) ───────────────────────────
     @Query("SELECT k FROM Kanji k WHERE k.radical.radId IN :radIds")
     List<Kanji> findByRadicalIds(@Param("radIds") List<Integer> radIds);
+
+    // ── Recherche multi-composants AND via kanji_component ─────────────────
+    // Trouve les kanji qui contiennent TOUS les composants sélectionnés
+    @Query("""
+        SELECT k FROM Kanji k
+        WHERE (
+            SELECT COUNT(DISTINCT kc.radical.radId)
+            FROM KanjiComponent kc
+            WHERE kc.kanji = k
+              AND kc.radical.radId IN :radIds
+        ) = :radCount
+        """)
+    List<Kanji> findByAllComponents(
+        @Param("radIds")   List<Integer> radIds,
+        @Param("radCount") long radCount
+    );
 
     // ── Combinaisons JLPT + Grade ──────────────────────────────────────────
     @Query("SELECT k FROM Kanji k WHERE k.jlptLevel.jlptCode = :jlpt AND k.kanjiGrade = :grade")

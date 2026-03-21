@@ -32,6 +32,14 @@ public class Word {
     @Column(name = "word_translation_fr", columnDefinition = "TEXT")
     private String wordTranslationFr;
 
+    /** Numéro de séquence JMdict (ent_seq) — pour le matching JLPT */
+    @Column(name = "word_jmdict_seq")
+    private Integer wordJmdictSeq;
+ 
+    /** Rang de fréquence : 1=très courant, 2=courant, 3=assez courant, NULL=inconnu */
+    @Column(name = "word_frequency_rank")
+    private Short wordFrequencyRank;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "word_jlpt_id")
     private JlptLevel jlptLevel;

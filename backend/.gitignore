@@ -44,6 +44,7 @@ application-secret.properties
 .DS_Store
 Thumbs.db
 
-# Fichiers de données lourds (télécharger manuellement, voir README-data.md)
-src/main/resources/data/*.xml
-src/main/resources/data/*.csv
+# Ignorer tout ce qui se trouve dans n'importe quel dossier data/
+**/data/**
+# Mais garder le README-data.md (ou tout autre fichier README)
+!**/data/README-data.md

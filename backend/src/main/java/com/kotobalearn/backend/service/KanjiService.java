@@ -2,9 +2,12 @@ package com.kotobalearn.backend.service;
 
 import com.kotobalearn.backend.dto.ExampleDto;
 import com.kotobalearn.backend.dto.KanjiDetailDto;
+import com.kotobalearn.backend.dto.KanjiDetailDto.ComponentDto;
 import com.kotobalearn.backend.dto.KanjiSummaryDto;
 import com.kotobalearn.backend.dto.ReadingDto;
 import com.kotobalearn.backend.model.Kanji;
+import com.kotobalearn.backend.model.KanjiComponent;
+import com.kotobalearn.backend.repository.KanjiComponentRepository;
 import com.kotobalearn.backend.repository.KanjiRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,7 +23,8 @@ import java.util.stream.Stream;
 @Transactional(readOnly = true)
 public class KanjiService {
 
-    private final KanjiRepository kanjiRepository;
+    private final KanjiRepository          kanjiRepository;
+    private final KanjiComponentRepository componentRepository;
 
     public List<KanjiSummaryDto> findByCriteria(
         String jlpt, Integer grade, Integer strokes,
@@ -32,10 +36,14 @@ public class KanjiService {
         boolean hasRadicals = radicalIds != null && !radicalIds.isEmpty();
         boolean hasSearch   = search     != null && !search.isBlank();
 
+        List<Integer> safeRadicalIds = radicalIds == null ? List.of() : radicalIds;
+        String safeSearch = search == null ? "" : search;
+        String searchLower = safeSearch.toLowerCase();
+
         List<Kanji> base;
 
         if (hasRadicals) {
-            base = kanjiRepository.findByRadicalIds(radicalIds);
+            base = kanjiRepository.findByAllComponents(radicalIds, (long) safeRadicalIds.size());
         } else if (hasStrokes && hasJlpt && hasGrade) {
             base = kanjiRepository.findByStrokesJlptGrade(strokes, jlpt, grade);
         } else if (hasStrokes && hasJlpt) {
@@ -54,67 +62,37 @@ public class KanjiService {
             base = hasSearch ? List.of() : kanjiRepository.findAll();
         }
 
-        if (hasSearch) {
-            String q = search != null ? search.toLowerCase() : "";
+        Stream<Kanji> stream = base.stream();
 
-            Stream<Kanji> source;
+        if (hasRadicals && (hasJlpt || hasGrade || hasStrokes)) {
+            stream = applyExtraFilters(stream, jlpt, hasJlpt, grade, hasGrade, strokes, hasStrokes);
+        }
+
+        if (hasSearch) {
+            String q = searchLower;
+
             if (!base.isEmpty() || hasRadicals || hasStrokes || hasJlpt || hasGrade) {
-                source = base.stream()
-                    .filter(k -> k.getKanjiMeaningEnglish() != null
-                        && k.getKanjiMeaningEnglish().toLowerCase().contains(q));
+                stream = stream.filter(k ->
+                    k.getKanjiMeaningEnglish() != null
+                    && k.getKanjiMeaningEnglish().toLowerCase().contains(q)
+                );
             } else {
-                source = kanjiRepository
+                stream = kanjiRepository
                     .findByKanjiMeaningEnglishContainingIgnoreCase(search)
                     .stream();
             }
 
-            if (hasRadicals && (hasJlpt || hasGrade || hasStrokes)) {
-                source = applyExtraFilters(source, jlpt, hasJlpt, grade, hasGrade, strokes, hasStrokes);
-            }
-
-            return source
+            return stream
                 .sorted(
-                    // 1. rang (exact=1, commence par=2, contient=3)
                     Comparator.comparingInt((Kanji k) -> rankMeaning(k.getKanjiMeaningEnglish(), q))
-                    // 2. longueur (le plus court en premier à rang égal)
-                    .thenComparingInt(k -> k.getKanjiMeaningEnglish() == null ? 999 : k.getKanjiMeaningEnglish().length())
+                    .thenComparingInt(k -> k.getKanjiMeaningEnglish() == null
+                        ? 999 : k.getKanjiMeaningEnglish().length())
                 )
                 .map(this::toSummaryDto)
                 .toList();
         }
 
-        Stream<Kanji> stream = base.stream();
-        if (hasRadicals && (hasJlpt || hasGrade || hasStrokes)) {
-            stream = applyExtraFilters(stream, jlpt, hasJlpt, grade, hasGrade, strokes, hasStrokes);
-        }
-
         return stream.map(this::toSummaryDto).toList();
-    }
-
-    /**
-     * 1 = exact, 2 = commence par, 3 = contient
-     */
-    private int rankMeaning(String meaning, String q) {
-        if (meaning == null) return 4;
-        String m = meaning.toLowerCase();
-        if (m.equals(q))     return 1;
-        if (m.startsWith(q)) return 2;
-        return 3;
-    }
-
-    private Stream<Kanji> applyExtraFilters(
-        Stream<Kanji> stream,
-        String jlpt, boolean hasJlpt,
-        Integer grade, boolean hasGrade,
-        Integer strokes, boolean hasStrokes
-    ) {
-        return stream.filter(k -> {
-            boolean ok = true;
-            if (hasJlpt    && k.getJlptLevel()  != null) ok = ok && jlpt.equals(k.getJlptLevel().getJlptCode());
-            if (hasGrade   && k.getKanjiGrade() != null) ok = ok && grade.equals(k.getKanjiGrade());
-            if (hasStrokes)                               ok = ok && strokes.equals(k.getKanjiStrokes());
-            return ok;
-        });
     }
 
     public KanjiDetailDto findById(Integer id) {
@@ -126,6 +104,39 @@ public class KanjiService {
         return toDetailDto(kanjiRepository.findByKanjiCharacter(character)
             .orElseThrow(() -> new NoSuchElementException("Kanji not found: " + character)));
     }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    private int rankMeaning(String meaning, String q) {
+        if (meaning == null) return 4;
+        String m = meaning.toLowerCase();
+        if (m.equals(q))     return 1;
+        if (m.startsWith(q)) return 2;
+        return 3;
+    }
+
+    private Stream<Kanji> applyExtraFilters(
+    Stream<Kanji> stream,
+    String jlpt, boolean hasJlpt,
+    Integer grade, boolean hasGrade,
+    Integer strokes, boolean hasStrokes
+) {
+    return stream.filter(k -> {
+        boolean ok = true;
+        if (hasJlpt) {
+            ok = ok && (k.getJlptLevel() != null && jlpt.equals(k.getJlptLevel().getJlptCode()));
+        }
+        if (hasGrade) {
+            ok = ok && (k.getKanjiGrade() != null && grade.equals(k.getKanjiGrade()));
+        }
+        if (hasStrokes) {
+            ok = ok && strokes.equals(k.getKanjiStrokes()); 
+        }
+        return ok;
+    });
+}
+
+    // ── Mappers ────────────────────────────────────────────────────────────
 
     private KanjiSummaryDto toSummaryDto(Kanji k) {
         KanjiSummaryDto dto = new KanjiSummaryDto();
@@ -149,11 +160,21 @@ public class KanjiService {
         dto.setKanjiVideoMp4Url(k.getKanjiVideoMp4Url());
         dto.setKanjiVideoWebmUrl(k.getKanjiVideoWebmUrl());
         if (k.getJlptLevel() != null) dto.setJlptCode(k.getJlptLevel().getJlptCode());
-        if (k.getRadical() != null) {
-            dto.setRadCharacter(k.getRadical().getRadCharacter());
-            dto.setRadNameRomaji(k.getRadical().getRadNameRomaji());
-            dto.setRadMeaningEnglish(k.getRadical().getRadMeaningEnglish());
-        }
+
+        // Composants visuels (KRADFILE)
+        List<KanjiComponent> comps = componentRepository.findByKanjiId(k.getKanjiId());
+        dto.setComponents(comps.stream().map(kc -> {
+            ComponentDto c = new ComponentDto();
+            c.setRadId(kc.getRadical().getRadId());
+            c.setRadCharacter(kc.getRadical().getRadCharacter());
+            c.setRadNameRomaji(kc.getRadical().getRadNameRomaji());
+            c.setRadMeaningEnglish(kc.getRadical().getRadMeaningEnglish());
+            c.setRadStrokes(kc.getRadical().getRadStrokes());
+            c.setPosition(kc.getKcPosition());
+            return c;
+        }).toList());
+
+        // Lectures
         if (k.getReadings() != null) {
             dto.setReadings(k.getReadings().stream().map(r -> {
                 ReadingDto rd = new ReadingDto();
@@ -162,14 +183,18 @@ public class KanjiService {
                 return rd;
             }).toList());
         }
+
+        // Exemples
         if (k.getExamples() != null) {
             dto.setExamples(k.getExamples().stream().map(e -> {
                 ExampleDto ed = new ExampleDto();
                 ed.setExId(e.getExId()); ed.setExJapanese(e.getExJapanese());
-                ed.setExMeaningEnglish(e.getExMeaningEnglish()); ed.setExAudioMp3Url(e.getExAudioMp3Url());
+                ed.setExMeaningEnglish(e.getExMeaningEnglish());
+                ed.setExAudioMp3Url(e.getExAudioMp3Url());
                 return ed;
             }).toList());
         }
+
         return dto;
     }
 }

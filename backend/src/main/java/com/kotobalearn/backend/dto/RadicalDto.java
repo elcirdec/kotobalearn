@@ -9,7 +9,8 @@ public record RadicalDto(
     String  radNameHiragana,
     String  radNameRomaji,
     String  radMeaningEnglish,
-    String  radPositionRomaji
+    String  radPositionRomaji,
+    String  radType
 ) {
     public static RadicalDto from(Radical r) {
         return new RadicalDto(
@@ -19,7 +20,8 @@ public record RadicalDto(
             r.getRadNameHiragana(),
             r.getRadNameRomaji(),
             r.getRadMeaningEnglish(),
-            r.getRadPositionRomaji()
+            r.getRadPositionRomaji(),
+            r.getRadType()
         );
     }
 }
