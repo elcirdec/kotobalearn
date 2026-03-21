@@ -23,17 +23,18 @@ public class KanjiController {
     private final WordRepository wordRepository;
 
     /**
-     * GET /api/kanji?jlpt=N5&grade=1&strokes=3&radicalIds=5,12&search=water
-     * Tous les paramètres sont optionnels et combinables.
-     * radicalIds = liste d'IDs séparés par virgule
+     * GET /api/kanji
+     * GET /api/kanji?jlpt=N5&grade=1&strokes=3
+     * GET /api/kanji?radicalIds=5,12,34   ← kanji contenant TOUS ces composants (AND)
+     * GET /api/kanji?search=water
      */
     @GetMapping
     public List<KanjiSummaryDto> getAll(
-        @RequestParam(required = false) String       jlpt,
-        @RequestParam(required = false) Integer      grade,
-        @RequestParam(required = false) Integer      strokes,
+        @RequestParam(required = false) String        jlpt,
+        @RequestParam(required = false) Integer       grade,
+        @RequestParam(required = false) Integer       strokes,
         @RequestParam(required = false) List<Integer> radicalIds,
-        @RequestParam(required = false) String       search
+        @RequestParam(required = false) String        search
     ) {
         return kanjiService.findByCriteria(jlpt, grade, strokes, radicalIds, search);
     }

@@ -23,7 +23,7 @@ public class RadicalController {
      */
     @GetMapping
     public ResponseEntity<List<RadicalDto>> getAll() {
-        List<RadicalDto> radicals = radicalRepository.findAll()
+        List<RadicalDto> radicals = radicalRepository.findActiveComponents()
             .stream()
             .map(RadicalDto::from)
             .sorted(Comparator
@@ -33,4 +33,6 @@ public class RadicalController {
             .toList();
         return ResponseEntity.ok(radicals);
     }
+
+    
 }

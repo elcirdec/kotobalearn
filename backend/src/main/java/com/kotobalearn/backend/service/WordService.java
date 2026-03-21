@@ -33,7 +33,8 @@ public class WordService {
         String search, String sortBy,
         int page, int size
     ) {
-        // Valeurs sécurisées (jamais null)
+        
+    // Valeurs sécurisées (jamais null)
     List<String> safeTags = tags == null ? List.of() : tags;
     String safeSearch = search == null ? "" : search;
     String searchLower = safeSearch.toLowerCase();

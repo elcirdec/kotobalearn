@@ -8,9 +8,8 @@ proviennent de [KanjiAlive](https://kanjialive.com/), publiées sous licence
 Source : https://github.com/kanjialive
          https://github.com/kanjialive/kanji-data-media
 
-## KANJIDIC2 / JMdict — EDRDG
-Les fichiers KANJIDIC2 et JMdict sont la propriété de James William Breen et du
-Electronic Dictionary Research and Development Group (EDRDG).
+## KANJIDIC2, JMdict, et fichiers associés — EDRDG
+Les fichiers KANJIDIC2, JMdict, les fichiers de décomposition de kanji (`kradfile`, `kradfile2`, `radkfile`, `radkfile2`) sont la propriété de James William Breen et du Electronic Dictionary Research and Development Group (EDRDG).
 Publiés sous licence Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0).
 Les données dérivées de ces fichiers sont redistribuées sous la même licence CC BY-SA 4.0.
 Source : https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project   
