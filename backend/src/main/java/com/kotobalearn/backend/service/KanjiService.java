@@ -26,52 +26,73 @@ public class KanjiService {
     private final KanjiRepository          kanjiRepository;
     private final KanjiComponentRepository componentRepository;
 
+    /**
+     * @param grades liste de grades (ex: [1,2,3,4,5,6] pour primaire, [8] pour secondaire)
+     *               null = pas de filtre grade
+     */
     public List<KanjiSummaryDto> findByCriteria(
-        String jlpt, Integer grade, Integer strokes,
+        String jlpt, List<Integer> grades, Integer strokes,
         List<Integer> radicalIds, String search
     ) {
-        boolean hasJlpt     = jlpt       != null && !jlpt.isBlank();
-        boolean hasGrade    = grade      != null;
-        boolean hasStrokes  = strokes    != null;
-        boolean hasRadicals = radicalIds != null && !radicalIds.isEmpty();
-        boolean hasSearch   = search     != null && !search.isBlank();
-
+        // Valeurs sécurisées (jamais null)
+        String safeJlpt = jlpt == null ? "" : jlpt;
         List<Integer> safeRadicalIds = radicalIds == null ? List.of() : radicalIds;
+        List<Integer> safeGrades = grades == null ? List.of() : grades;
+        Integer safeStrokes = strokes == null ? 0 : strokes;
         String safeSearch = search == null ? "" : search;
         String searchLower = safeSearch.toLowerCase();
+
+        boolean hasJlpt     = jlpt      != null && !jlpt.isBlank();
+        boolean hasGrades   = grades    != null && !grades.isEmpty();
+        boolean hasStrokes  = strokes   != null;
+        boolean hasRadicals = radicalIds != null && !radicalIds.isEmpty();
+        boolean hasSearch   = search    != null && !search.isBlank();
 
         List<Kanji> base;
 
         if (hasRadicals) {
             base = kanjiRepository.findByAllComponents(radicalIds, (long) safeRadicalIds.size());
-        } else if (hasStrokes && hasJlpt && hasGrade) {
-            base = kanjiRepository.findByStrokesJlptGrade(strokes, jlpt, grade);
+        } else if (hasStrokes && hasJlpt && hasGrades) {
+            // Strokes + JLPT + grades : filter en mémoire
+            final List<Integer> g = safeGrades;
+            base = kanjiRepository.findByStrokesAndJlpt(strokes, jlpt).stream()
+                .filter(k -> k.getKanjiGrade() != null && g.contains(k.getKanjiGrade()))
+                .toList();
         } else if (hasStrokes && hasJlpt) {
             base = kanjiRepository.findByStrokesAndJlpt(strokes, jlpt);
-        } else if (hasStrokes && hasGrade) {
-            base = kanjiRepository.findByStrokesAndGrade(strokes, grade);
+        } else if (hasStrokes && hasGrades) {
+            base = kanjiRepository.findByStrokesAndGradeIn(strokes, grades);
         } else if (hasStrokes) {
             base = kanjiRepository.findByKanjiStrokes(strokes);
-        } else if (hasJlpt && hasGrade) {
-            base = kanjiRepository.findByJlptAndGrade(jlpt, grade);
+        } else if (hasJlpt && hasGrades) {
+            base = kanjiRepository.findByJlptAndGradeIn(jlpt, grades);
         } else if (hasJlpt) {
             base = kanjiRepository.findByJlptLevel_JlptCode(jlpt);
-        } else if (hasGrade) {
-            base = kanjiRepository.findByKanjiGrade(grade);
+        } else if (hasGrades) {
+            base = kanjiRepository.findByKanjiGradeIn(grades);
         } else {
             base = hasSearch ? List.of() : kanjiRepository.findAll();
         }
 
         Stream<Kanji> stream = base.stream();
 
-        if (hasRadicals && (hasJlpt || hasGrade || hasStrokes)) {
-            stream = applyExtraFilters(stream, jlpt, hasJlpt, grade, hasGrade, strokes, hasStrokes);
+        // Filtres supplémentaires si radicaux + autres critères
+        if (hasRadicals && (hasJlpt || hasGrades || hasStrokes)) {
+            final List<Integer> g = safeGrades;
+            stream = stream.filter(k -> {
+                boolean ok = true;
+                if (hasJlpt)   ok = ok && k.getJlptLevel() != null
+                                       && safeJlpt.equals(k.getJlptLevel().getJlptCode());
+                if (hasGrades) ok = ok && k.getKanjiGrade() != null
+                                       && g.contains(k.getKanjiGrade());
+                if (hasStrokes) ok = ok && safeStrokes.equals(k.getKanjiStrokes());
+                return ok;
+            });
         }
 
         if (hasSearch) {
             String q = searchLower;
-
-            if (!base.isEmpty() || hasRadicals || hasStrokes || hasJlpt || hasGrade) {
+            if (!base.isEmpty() || hasRadicals || hasStrokes || hasJlpt || hasGrades) {
                 stream = stream.filter(k ->
                     k.getKanjiMeaningEnglish() != null
                     && k.getKanjiMeaningEnglish().toLowerCase().contains(q)
@@ -81,7 +102,6 @@ public class KanjiService {
                     .findByKanjiMeaningEnglishContainingIgnoreCase(search)
                     .stream();
             }
-
             return stream
                 .sorted(
                     Comparator.comparingInt((Kanji k) -> rankMeaning(k.getKanjiMeaningEnglish(), q))
@@ -115,27 +135,6 @@ public class KanjiService {
         return 3;
     }
 
-    private Stream<Kanji> applyExtraFilters(
-    Stream<Kanji> stream,
-    String jlpt, boolean hasJlpt,
-    Integer grade, boolean hasGrade,
-    Integer strokes, boolean hasStrokes
-) {
-    return stream.filter(k -> {
-        boolean ok = true;
-        if (hasJlpt) {
-            ok = ok && (k.getJlptLevel() != null && jlpt.equals(k.getJlptLevel().getJlptCode()));
-        }
-        if (hasGrade) {
-            ok = ok && (k.getKanjiGrade() != null && grade.equals(k.getKanjiGrade()));
-        }
-        if (hasStrokes) {
-            ok = ok && strokes.equals(k.getKanjiStrokes()); 
-        }
-        return ok;
-    });
-}
-
     // ── Mappers ────────────────────────────────────────────────────────────
 
     private KanjiSummaryDto toSummaryDto(Kanji k) {
@@ -161,7 +160,6 @@ public class KanjiService {
         dto.setKanjiVideoWebmUrl(k.getKanjiVideoWebmUrl());
         if (k.getJlptLevel() != null) dto.setJlptCode(k.getJlptLevel().getJlptCode());
 
-        // Composants visuels (KRADFILE)
         List<KanjiComponent> comps = componentRepository.findByKanjiId(k.getKanjiId());
         dto.setComponents(comps.stream().map(kc -> {
             ComponentDto c = new ComponentDto();
@@ -174,7 +172,6 @@ public class KanjiService {
             return c;
         }).toList());
 
-        // Lectures
         if (k.getReadings() != null) {
             dto.setReadings(k.getReadings().stream().map(r -> {
                 ReadingDto rd = new ReadingDto();
@@ -184,7 +181,6 @@ public class KanjiService {
             }).toList());
         }
 
-        // Exemples
         if (k.getExamples() != null) {
             dto.setExamples(k.getExamples().stream().map(e -> {
                 ExampleDto ed = new ExampleDto();

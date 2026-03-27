@@ -12,6 +12,7 @@ public interface KanjiRepository extends JpaRepository<Kanji, Integer> {
 
     Optional<Kanji> findByKanjiCharacter(String character);
     List<Kanji> findByKanjiGrade(Integer grade);
+    List<Kanji> findByKanjiGradeIn(List<Integer> grades);
     List<Kanji> findByJlptLevel_JlptCode(String jlptCode);
     List<Kanji> findByKanjiStrokes(Integer strokes);
     List<Kanji> findByKanjiMeaningEnglishContainingIgnoreCase(String meaning);
@@ -40,6 +41,8 @@ public interface KanjiRepository extends JpaRepository<Kanji, Integer> {
     @Query("SELECT k FROM Kanji k WHERE k.jlptLevel.jlptCode = :jlpt AND k.kanjiGrade = :grade")
     List<Kanji> findByJlptAndGrade(@Param("jlpt") String jlpt, @Param("grade") Integer grade);
 
+    @Query("SELECT k FROM Kanji k WHERE k.jlptLevel.jlptCode = :jlpt AND k.kanjiGrade IN :grades")
+    List<Kanji> findByJlptAndGradeIn(@Param("jlpt") String jlpt, @Param("grades") List<Integer> grades);
     // ── Combinaisons Strokes ───────────────────────────────────────────────
     @Query("SELECT k FROM Kanji k WHERE k.kanjiStrokes = :s AND k.jlptLevel.jlptCode = :jlpt")
     List<Kanji> findByStrokesAndJlpt(@Param("s") Integer s, @Param("jlpt") String jlpt);
@@ -49,4 +52,7 @@ public interface KanjiRepository extends JpaRepository<Kanji, Integer> {
 
     @Query("SELECT k FROM Kanji k WHERE k.kanjiStrokes = :s AND k.jlptLevel.jlptCode = :jlpt AND k.kanjiGrade = :grade")
     List<Kanji> findByStrokesJlptGrade(@Param("s") Integer s, @Param("jlpt") String jlpt, @Param("grade") Integer grade);
+
+    @Query("SELECT k FROM Kanji k WHERE k.kanjiStrokes = :s AND k.kanjiGrade IN :grades")
+    List<Kanji> findByStrokesAndGradeIn(@Param("s") Integer s, @Param("grades") List<Integer> grades);
 }
