@@ -24,19 +24,23 @@ public class KanjiController {
 
     /**
      * GET /api/kanji
-     * GET /api/kanji?jlpt=N5&grade=1&strokes=3
-     * GET /api/kanji?radicalIds=5,12,34   ← kanji contenant TOUS ces composants (AND)
+     * GET /api/kanji?jlpt=N5
+     * GET /api/kanji?gradeGroup=primaire     ← grades 1-6 (école primaire)
+     * GET /api/kanji?gradeGroup=secondaire   ← grade 8 (collège/lycée, joyo)
+     * GET /api/kanji?gradeGroup=prenoms      ← grade 9 (jinmeiyō, prénoms)
+     * GET /api/kanji?radicalIds=5,12,34
      * GET /api/kanji?search=water
      */
     @GetMapping
     public List<KanjiSummaryDto> getAll(
         @RequestParam(required = false) String        jlpt,
-        @RequestParam(required = false) Integer       grade,
+        @RequestParam(required = false) String        gradeGroup,
         @RequestParam(required = false) Integer       strokes,
         @RequestParam(required = false) List<Integer> radicalIds,
         @RequestParam(required = false) String        search
     ) {
-        return kanjiService.findByCriteria(jlpt, grade, strokes, radicalIds, search);
+        List<Integer> grades = resolveGrades(gradeGroup);
+        return kanjiService.findByCriteria(jlpt, grades, strokes, radicalIds, search);
     }
 
     @GetMapping("/{id}")
@@ -58,5 +62,22 @@ public class KanjiController {
         return ResponseEntity.ok(
             wordRepository.findByKanjiId(id, PageRequest.of(page, size, Sort.by("wordId")))
         );
+    }
+
+    /**
+     * Convertit un gradeGroup en liste de grades SQL.
+     * primaire   → 1, 2, 3, 4, 5, 6
+     * secondaire → 8
+     * prenoms    → 9
+     * null       → null (pas de filtre)
+     */
+    private List<Integer> resolveGrades(String gradeGroup) {
+        if (gradeGroup == null || gradeGroup.isBlank()) return null;
+        return switch (gradeGroup.toLowerCase()) {
+            case "primaire"   -> List.of(1, 2, 3, 4, 5, 6);
+            case "secondaire" -> List.of(8);
+            case "prenoms"    -> List.of(9);
+            default           -> null;
+        };
     }
 }

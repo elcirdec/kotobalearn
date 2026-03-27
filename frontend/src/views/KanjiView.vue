@@ -38,15 +38,51 @@
 
           <div class="filter-bar-sep">·</div>
 
-          <!-- Année scolaire -->
+          <!-- Niveau scolaire (groupes logiques) -->
           <div class="filter-unit">
-            <span class="filter-bar-label">Année scolaire</span>
+            <span class="filter-bar-label">Niveau scolaire</span>
             <div class="toggles">
-              <button :class="['toggle', { active: store.selectedGrade === '' }]"
-                @click="store.setGrade('')">Toutes</button>
-              <button v-for="g in [1,2,3,4,5,6]" :key="g"
-                :class="['toggle', { active: store.selectedGrade === String(g) }]"
-                @click="store.setGrade(String(g))">{{ g }}</button>
+              <button :class="['toggle', { active: store.selectedGradeGroup === '' }]"
+                @click="store.setGradeGroup('')">Tous</button>
+
+              <div class="tooltip-wrap">
+                <button :class="['toggle', { active: store.selectedGradeGroup === 'primaire' }]"
+                  @click="store.setGradeGroup(store.selectedGradeGroup === 'primaire' ? '' : 'primaire')">
+                  Primaire
+                </button>
+                <span class="tooltip-box tooltip-box--bottom">
+                  <strong>教育漢字 · Kyōiku kanji</strong><br>
+                  1 006 kanji enseignés à l'école primaire japonaise,
+                  répartis sur 6 années (grades 1 à 6).
+                  Représente la base de la lecture courante.
+                </span>
+              </div>
+
+              <div class="tooltip-wrap">
+                <button :class="['toggle', { active: store.selectedGradeGroup === 'secondaire' }]"
+                  @click="store.setGradeGroup(store.selectedGradeGroup === 'secondaire' ? '' : 'secondaire')">
+                  Secondaire
+                </button>
+                <span class="tooltip-box tooltip-box--bottom">
+                  <strong>常用漢字 · Jōyō kanji (grade 8)</strong><br>
+                  ~1 130 kanji appris au collège et lycée japonais,
+                  en complément des 1 006 kanji du primaire.
+                  Ensemble, ils forment les 2 136 kanji d'usage courant.
+                </span>
+              </div>
+
+              <div class="tooltip-wrap">
+                <button :class="['toggle', { active: store.selectedGradeGroup === 'prenoms' }]"
+                  @click="store.setGradeGroup(store.selectedGradeGroup === 'prenoms' ? '' : 'prenoms')">
+                  Prénoms
+                </button>
+                <span class="tooltip-box tooltip-box--bottom">
+                  <strong>人名用漢字 · Jinmeiyō kanji (grade 9)</strong><br>
+                  ~650 kanji autorisés pour l'écriture des prénoms japonais,
+                  mais non inclus dans les kanji d'usage courant (jōyō).
+                  On les rencontre principalement dans les noms de personnes.
+                </span>
+              </div>
             </div>
           </div>
 
@@ -62,8 +98,7 @@
                 <span class="dropdown-arrow">▼</span>
               </button>
               <div class="dropdown-list" v-if="showStrokes">
-                <button class="dropdown-item"
-                  :class="{ active: store.selectedStrokes === '' }"
+                <button class="dropdown-item" :class="{ active: store.selectedStrokes === '' }"
                   @click="pickStroke('')">Tous</button>
                 <button v-for="s in strokeOptions" :key="s"
                   class="dropdown-item" :class="{ active: store.selectedStrokes === String(s) }"
@@ -74,9 +109,9 @@
 
           <div class="filter-bar-sep">·</div>
 
-          <!-- Composants (multi, AND) -->
+          <!-- Radicaux -->
           <div class="filter-unit">
-            <span class="filter-bar-label">Composants</span>
+            <span class="filter-bar-label">Radicaux</span>
             <button class="dropdown-btn" :class="{ active: store.selectedRadicals.length > 0 }"
               @click="showRadicalGrid = !showRadicalGrid">
               <span v-if="store.selectedRadicals.length > 0" class="comp-count">
@@ -95,9 +130,9 @@
             JLPT {{ store.selectedJlpt }}
             <button @click="store.setJlpt('')">×</button>
           </span>
-          <span v-if="store.selectedGrade" class="chip chip-grade">
-            Année {{ store.selectedGrade }}
-            <button @click="store.setGrade('')">×</button>
+          <span v-if="store.selectedGradeGroup" class="chip chip-grade">
+            {{ gradeGroupLabel(store.selectedGradeGroup) }}
+            <button @click="store.setGradeGroup('')">×</button>
           </span>
           <span v-if="store.selectedStrokes !== ''" class="chip chip-strokes">
             {{ store.selectedStrokes }} trait{{ store.selectedStrokes > 1 ? 's' : '' }}
@@ -105,33 +140,29 @@
           </span>
           <span v-for="r in store.selectedRadicals" :key="r.radId" class="chip chip-radical">
             <span class="radical-chip-char">{{ r.radCharacter }}</span>
-            {{ r.radNameRomaji }}
+            {{ r.radNameRomaji || r.radCharacter }}
             <button @click="store.removeRadical(r.radId)">×</button>
           </span>
           <button class="chip-reset" @click="resetAll">Tout effacer</button>
         </div>
 
-        <!-- Grille composants collapsible -->
+        <!-- Grille radicaux -->
         <Transition name="collapse">
           <div v-if="showRadicalGrid" class="radical-grid-wrap">
             <div v-if="!store.radicalsLoaded" class="loading-sm">Chargement…</div>
-            <div v-else-if="store.radicals.length === 0" class="empty-sm">
-              Aucun composant disponible
-            </div>
             <div v-else>
               <p class="radical-hint">
-                Sélectionnez un ou plusieurs composants —
+                Sélectionnez un ou plusieurs radicaux —
                 les kanji doivent les contenir <strong>tous</strong>
               </p>
-              <div v-for="group in store.radicalsByStrokes" :key="group.strokes"
-                class="radical-group">
+              <div v-for="group in store.radicalsByStrokes" :key="group.strokes" class="radical-group">
                 <span class="radical-group-label">
                   {{ group.strokes }} trait{{ group.strokes > 1 ? 's' : '' }}
                 </span>
                 <div class="radical-row">
                   <button v-for="r in group.list" :key="r.radId"
                     :class="['radical-cell', { active: isSelected(r.radId) }]"
-                    :title="`${r.radNameRomaji} · ${r.radMeaningEnglish}`"
+                    :title="[r.radNameRomaji, r.radMeaningEnglish].filter(Boolean).join(' · ')"
                     @click="store.toggleRadical(r)">
                     {{ r.radCharacter }}
                   </button>
@@ -182,10 +213,11 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
+import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { useKanjiStore } from '../stores/kanji'
 
 const store = useKanjiStore()
+const route = useRoute()
 
 const strokeOptions   = Array.from({ length: 64 }, (_, i) => i + 1)
 const showStrokes     = ref(false)
@@ -194,6 +226,12 @@ const strokesRef      = ref(null)
 
 function pickStroke(s) { showStrokes.value = false; store.setStrokes(s) }
 function isSelected(id) { return store.selectedRadicals.some(r => r.radId === id) }
+
+const gradeGroupLabel = (g) => ({
+  primaire:   'Primaire (1-6)',
+  secondaire: 'Secondaire',
+  prenoms:    'Prénoms',
+}[g] ?? g)
 
 function resetAll() {
   showStrokes.value = false
@@ -213,7 +251,18 @@ onBeforeRouteLeave((to) => {
 
 onMounted(async () => {
   document.addEventListener('click', handleClickOutside)
-  store.loadRadicals()
+  await store.loadRadicals()
+
+  const radicalIdsParam = route.query.radicalIds
+  if (radicalIdsParam) {
+    store.clear()
+    const ids = String(radicalIdsParam).split(',').map(Number).filter(Boolean)
+    for (const id of ids) store.addRadicalById(id)
+    showRadicalGrid.value = true
+    await store.fetchKanji()
+    return
+  }
+
   if (store.returnFromChild) {
     store.returnFromChild = false
     return
@@ -255,10 +304,42 @@ function truncate(str, len = 28) {
 .filter-unit { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
 .filter-bar-label { font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 
-.toggles { display: flex; gap: 0.35rem; }
+.toggles { display: flex; gap: 0.35rem; align-items: center; }
 .toggle { padding: 0.3rem 0.85rem; border: 1.5px solid var(--paper-mid); border-radius: 20px; background: white; font-family: var(--font-display); font-size: 0.85rem; color: var(--ink-light); cursor: pointer; white-space: nowrap; transition: all 0.2s ease; }
 .toggle:hover { border-color: var(--ink); color: var(--ink); }
 .toggle.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
+/* Tooltip (même style que on/kun-yomi) */
+.tooltip-wrap { position: relative; display: inline-flex; }
+.tooltip-box {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  width: 240px;
+  z-index: 100;
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+  text-align: left;
+}
+.tooltip-box::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-bottom-color: var(--ink);
+}
+.tooltip-wrap:hover .tooltip-box { display: block; }
 
 .dropdown-wrap { position: relative; }
 .dropdown-btn { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.9rem; border: 1.5px solid var(--paper-mid); border-radius: 20px; background: white; font-family: var(--font-display); font-size: 0.85rem; color: var(--ink-light); cursor: pointer; white-space: nowrap; transition: all 0.2s; }
@@ -306,11 +387,12 @@ function truncate(str, len = 28) {
 .kanji-meaning { font-size: 0.72rem; color: var(--muted); line-height: 1.4; }
 .kanji-jlpt { position: absolute; top: 0.4rem; right: 0.4rem; font-size: 0.6rem; letter-spacing: 0.05em; background: var(--vermilion); color: white; padding: 0.1rem 0.35rem; border-radius: 2px; }
 .loading-sm { padding: 1.5rem; text-align: center; color: var(--muted); }
-.empty-sm { padding: 1rem; color: var(--muted); font-style: italic; }
 .pagination-info { text-align: center; margin-top: 1rem; color: var(--muted); font-size: 0.85rem; }
 
 @media (max-width: 768px) {
   .filter-bar { flex-direction: column; align-items: flex-start; }
   .filter-bar-sep { display: none; }
+  .tooltip-box { left: 0; transform: none; }
+  .tooltip-box::before { left: 20px; }
 }
 </style>

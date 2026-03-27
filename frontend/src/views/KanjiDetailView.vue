@@ -17,22 +17,14 @@
 
           <div class="header-left">
             <div class="stroke-container">
-              <video
-                v-if="kanji.kanjiVideoMp4Url && showVideo"
-                class="stroke-video"
-                :poster="kanji.kanjiVideoPosterUrl"
-                autoplay loop muted playsinline
-                :key="'video'"
-              >
+              <video v-if="kanji.kanjiVideoMp4Url && showVideo"
+                class="stroke-video" :poster="kanji.kanjiVideoPosterUrl"
+                autoplay loop muted playsinline :key="'video'">
                 <source :src="kanji.kanjiVideoWebmUrl" type="video/webm" />
                 <source :src="kanji.kanjiVideoMp4Url"  type="video/mp4"  />
               </video>
-              <img
-                v-else-if="kanji.kanjiVideoPosterUrl && !showVideo"
-                :src="kanji.kanjiVideoPosterUrl"
-                :alt="kanji.kanjiCharacter"
-                class="stroke-img"
-              />
+              <img v-else-if="kanji.kanjiVideoPosterUrl && !showVideo"
+                :src="kanji.kanjiVideoPosterUrl" :alt="kanji.kanjiCharacter" class="stroke-img" />
               <span v-else class="kanji-char-big jp">{{ kanji.kanjiCharacter }}</span>
             </div>
 
@@ -43,28 +35,40 @@
           </div>
 
           <div class="header-right">
+
+            <!-- Badges JLPT + Grade (chips avec tooltip) -->
             <div class="header-badges">
-              <span class="badge badge-jlpt"    v-if="kanji.jlptCode">{{ kanji.jlptCode }}</span>
-              <span class="badge badge-grade"   v-if="kanji.kanjiGrade">Année {{ kanji.kanjiGrade }}</span>
-              <span class="badge badge-strokes">{{ kanji.kanjiStrokes }} trait{{ kanji.kanjiStrokes > 1 ? 's' : '' }}</span>
+              <span class="badge badge-jlpt" v-if="kanji.jlptCode">{{ kanji.jlptCode }}</span>
+
+              <!-- Grade scolaire → chip avec tooltip -->
+              <span class="tooltip-wrap" v-if="kanji.kanjiGrade">
+                <span :class="['badge', gradeInfo(kanji.kanjiGrade).badgeClass]">
+                  {{ gradeInfo(kanji.kanjiGrade).label }}
+                </span>
+                <span class="tooltip-box tooltip-box--bottom">
+                  <strong>{{ gradeInfo(kanji.kanjiGrade).title }}</strong><br>
+                  {{ gradeInfo(kanji.kanjiGrade).description }}
+                </span>
+              </span>
+
+              <span class="badge badge-strokes">
+                {{ kanji.kanjiStrokes }} trait{{ kanji.kanjiStrokes > 1 ? 's' : '' }}
+              </span>
             </div>
 
             <h1 class="kanji-meaning">{{ kanji.kanjiMeaningEnglish }}</h1>
 
-            <!-- ── Radicaux cliquables ──────────────────────────────────── -->
+            <!-- Radicaux cliquables -->
             <div v-if="kanji.components && kanji.components.length > 0" class="components-wrap">
               <span class="components-label">
                 Radicaux
                 <span class="components-hint">· cliquez pour rechercher</span>
               </span>
               <div class="components-list">
-                <button
-                  v-for="comp in kanji.components"
-                  :key="comp.radId"
+                <button v-for="comp in kanji.components" :key="comp.radId"
                   class="component-chip"
                   :title="[comp.radNameRomaji, comp.radMeaningEnglish, comp.radStrokes ? comp.radStrokes + ' traits' : ''].filter(Boolean).join(' · ')"
-                  @click="searchByComponent(comp)"
-                >
+                  @click="searchByComponent(comp)">
                   <span class="comp-char">{{ comp.radCharacter }}</span>
                   <div class="comp-info" v-if="comp.radMeaningEnglish || comp.radNameRomaji">
                     <span class="comp-name"    v-if="comp.radNameRomaji">{{ comp.radNameRomaji }}</span>
@@ -134,23 +138,17 @@
             Mots composés
             <span class="section-count" v-if="wordsTotal > 0">{{ wordsTotal.toLocaleString() }}</span>
           </h2>
-
           <div v-if="wordsLoading" class="loading-sm">Chargement des mots…</div>
           <div v-else-if="words.length === 0" class="empty-sm">Aucun mot trouvé</div>
-
           <div v-else>
             <div class="words-grid">
-              <RouterLink
-                v-for="w in words" :key="w.wordId"
-                :to="`/mots/${w.wordId}`"
-                class="word-card"
-              >
+              <RouterLink v-for="w in words" :key="w.wordId"
+                :to="`/mots/${w.wordId}`" class="word-card">
                 <span class="word-jp jp">{{ w.wordJapanese }}</span>
                 <span class="word-reading">{{ w.wordReading }}</span>
                 <span class="word-en">{{ truncate(w.wordTranslationEn, 50) }}</span>
               </RouterLink>
             </div>
-
             <nav class="pagination-simple" v-if="wordsTotalPages > 1">
               <button @click="wordsPage--; loadWords()" :disabled="wordsPage === 0">‹ Préc.</button>
               <span>{{ wordsPage + 1 }} / {{ wordsTotalPages }}</span>
@@ -169,12 +167,8 @@
             <div v-for="ex in kanji.examples" :key="ex.exId" class="example-card">
               <span class="example-jp jp">{{ ex.exJapanese }}</span>
               <span class="example-en">{{ ex.exMeaningEnglish }}</span>
-              <button
-                v-if="ex.exAudioMp3Url"
-                class="audio-btn"
-                @click="playAudio(ex.exAudioMp3Url)"
-                title="Écouter"
-              >▶</button>
+              <button v-if="ex.exAudioMp3Url" class="audio-btn"
+                @click="playAudio(ex.exAudioMp3Url)" title="Écouter">▶</button>
             </div>
           </div>
         </section>
@@ -207,6 +201,32 @@ const wordsLoading    = ref(false)
 const onReadings  = computed(() => kanji.value?.readings?.filter(r => r.readType === 'ON')  ?? [])
 const kunReadings = computed(() => kanji.value?.readings?.filter(r => r.readType === 'KUN') ?? [])
 
+// ── Infos grade ──────────────────────────────────────────────────────────
+function gradeInfo(grade) {
+  if (grade >= 1 && grade <= 6) return {
+    label:       `Primaire · An ${grade}`,
+    badgeClass:  'badge-grade-primaire',
+    title:       `教育漢字 · Kyōiku kanji — Année ${grade}`,
+    description: `Kanji enseigné en ${grade}ᵉ année de l'école primaire japonaise. `
+               + `Les 1 006 kyōiku kanji sont répartis sur 6 niveaux et forment la base de la lecture.`,
+  }
+  if (grade === 8) return {
+    label:       'Secondaire',
+    badgeClass:  'badge-grade-secondaire',
+    title:       '常用漢字 · Jōyō kanji (grade 8)',
+    description: 'Kanji appris au collège et lycée japonais. Avec les 1 006 du primaire, '
+               + 'ils forment les 2 136 jōyō kanji d\'usage courant.',
+  }
+  if (grade === 9) return {
+    label:       'Prénom',
+    badgeClass:  'badge-grade-prenoms',
+    title:       '人名用漢字 · Jinmeiyō kanji (grade 9)',
+    description: 'Kanji autorisé pour l\'écriture des prénoms japonais. '
+               + 'Non inclus dans les jōyō, on le rencontre principalement dans les noms de personnes.',
+  }
+  return { label: `Grade ${grade}`, badgeClass: 'badge-grade-autre', title: '', description: '' }
+}
+
 onMounted(async () => {
   try {
     kanji.value = await kanjiApi.get(route.params.id)
@@ -230,10 +250,6 @@ async function loadWords() {
   }
 }
 
-/**
- * Clic sur un composant → naviguer vers /kanji avec ce radical pré-sélectionné.
- * Le store est marqué returnFromChild=false pour forcer le reset + chargement depuis URL.
- */
 function searchByComponent(comp) {
   store.returnFromChild = false
   router.push({ path: '/kanji', query: { radicalIds: comp.radId } })
@@ -248,169 +264,126 @@ function truncate(str, len = 50) {
 </script>
 
 <style scoped>
-.back-link {
-  display: inline-block; margin-bottom: 2rem;
-  font-family: var(--font-display); font-size: 0.85rem;
-  letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--muted); text-decoration: none; transition: color 0.2s;
-}
+.back-link { display: inline-block; margin-bottom: 2rem; font-family: var(--font-display); font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); text-decoration: none; transition: color 0.2s; }
 .back-link:hover { color: var(--ink); }
 
-/* ─── En-tête ─────────────────────────────────────────────────────────── */
-.detail-header {
-  display: grid; grid-template-columns: auto 1fr;
-  gap: 3rem; align-items: flex-start;
-  margin-bottom: 3rem; padding-bottom: 2.5rem;
-  border-bottom: 1px solid var(--paper-mid);
-}
-.stroke-container {
-  width: 200px; height: 200px; background: white;
-  border: 1px solid var(--paper-mid); border-radius: var(--radius);
-  overflow: hidden; display: flex; align-items: center; justify-content: center;
-}
+.detail-header { display: grid; grid-template-columns: auto 1fr; gap: 3rem; align-items: flex-start; margin-bottom: 3rem; padding-bottom: 2.5rem; border-bottom: 1px solid var(--paper-mid); }
+.stroke-container { width: 200px; height: 200px; background: white; border: 1px solid var(--paper-mid); border-radius: var(--radius); overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .stroke-video, .stroke-img { width: 100%; height: 100%; object-fit: contain; }
 .kanji-char-big { font-size: 8rem; line-height: 1; color: var(--ink); }
-
-.stroke-toggle {
-  display: flex; margin-top: 0.75rem;
-  border: 1.5px solid var(--paper-mid); border-radius: 20px;
-  overflow: hidden; width: 200px;
-}
-.toggle-btn {
-  flex: 1; padding: 0.35rem 0; background: white; border: none;
-  font-family: var(--font-display); font-size: 0.8rem;
-  letter-spacing: 0.04em; color: var(--muted); cursor: pointer; transition: all 0.2s;
-}
+.stroke-toggle { display: flex; margin-top: 0.75rem; border: 1.5px solid var(--paper-mid); border-radius: 20px; overflow: hidden; width: 200px; }
+.toggle-btn { flex: 1; padding: 0.35rem 0; background: white; border: none; font-family: var(--font-display); font-size: 0.8rem; letter-spacing: 0.04em; color: var(--muted); cursor: pointer; transition: all 0.2s; }
 .toggle-btn.active { background: var(--ink); color: var(--paper); }
 
-.header-badges { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
-.badge {
-  padding: 0.25rem 0.75rem; border-radius: 3px;
-  font-size: 0.75rem; letter-spacing: 0.08em; font-family: var(--font-display);
-}
-.badge-jlpt    { background: var(--vermilion); color: white; }
-.badge-grade   { background: var(--ink); color: var(--paper); }
-.badge-strokes { background: var(--paper-dark); color: var(--ink-light); border: 1px solid var(--paper-mid); }
+/* Badges */
+.header-badges { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+.badge { padding: 0.25rem 0.75rem; border-radius: 3px; font-size: 0.75rem; letter-spacing: 0.08em; font-family: var(--font-display); cursor: default; }
+.badge-jlpt           { background: var(--vermilion); color: white; }
+.badge-grade-primaire  { background: #2563eb; color: white; }
+.badge-grade-secondaire{ background: #7c3aed; color: white; }
+.badge-grade-prenoms   { background: #0891b2; color: white; }
+.badge-grade-autre     { background: var(--ink); color: var(--paper); }
+.badge-strokes         { background: var(--paper-dark); color: var(--ink-light); border: 1px solid var(--paper-mid); }
 
-.kanji-meaning {
-  font-size: clamp(1.8rem, 4vw, 3rem);
-  font-weight: 300; margin-bottom: 1.5rem; text-transform: capitalize;
+/* Tooltip générique */
+.tooltip-wrap { position: relative; display: inline-flex; }
+.tooltip-box {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  width: 260px;
+  z-index: 100;
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+  text-align: left;
+  white-space: normal;
 }
+.tooltip-box::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--ink);
+}
+/* Tooltip qui s'ouvre vers le bas (KanjiView) */
+.tooltip-box--bottom {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+.tooltip-box--bottom::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--ink);
+}
+.tooltip-wrap:hover .tooltip-box { display: block; }
 
-/* ─── Radicaux ───────────────────────────────────────────────────────── */
+/* Tooltip icône ? */
+.tooltip-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--muted); font-size: 0.65rem; color: var(--muted); cursor: help; line-height: 1; transition: all 0.2s; flex-shrink: 0; }
+.tooltip-icon:hover { border-color: var(--vermilion); color: var(--vermilion); }
+
+.kanji-meaning { font-size: clamp(1.8rem, 4vw, 3rem); font-weight: 300; margin-bottom: 1.5rem; text-transform: capitalize; }
+
+/* Radicaux */
 .components-wrap { display: flex; flex-direction: column; gap: 0.6rem; }
-.components-label {
-  font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
-  display: flex; align-items: center; gap: 0.5rem;
-}
+.components-label { font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 0.5rem; }
 .components-hint { font-size: 0.65rem; letter-spacing: 0.04em; text-transform: none; font-style: italic; }
 .components-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-
-.component-chip {
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.4rem 0.75rem; background: white;
-  border: 1px solid var(--paper-mid); border-radius: var(--radius);
-  transition: all 0.15s; cursor: pointer;
-}
-.component-chip:hover {
-  border-color: var(--vermilion);
-  background: #fdf5f5;
-  transform: translateY(-1px);
-  box-shadow: var(--shadow);
-}
-
-.comp-char {
-  font-family: var(--font-cjk, 'Noto Sans JP', 'Noto Sans CJK JP', sans-serif);
-  font-size: 1.4rem; line-height: 1; color: var(--vermilion);
-}
-.comp-info    { display: flex; flex-direction: column; gap: 0.05rem; }
+.component-chip { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem; background: white; border: 1px solid var(--paper-mid); border-radius: var(--radius); transition: all 0.15s; cursor: pointer; }
+.component-chip:hover { border-color: var(--vermilion); background: #fdf5f5; transform: translateY(-1px); box-shadow: var(--shadow); }
+.comp-char { font-family: var(--font-cjk, 'Noto Sans JP', 'Noto Sans CJK JP', sans-serif); font-size: 1.4rem; line-height: 1; color: var(--vermilion); }
+.comp-info { display: flex; flex-direction: column; gap: 0.05rem; }
 .comp-name    { font-size: 0.78rem; font-weight: 500; color: var(--ink); }
 .comp-meaning { font-size: 0.72rem; color: var(--muted); }
-
 .components-missing { font-size: 0.82rem; color: var(--muted); font-style: italic; opacity: 0.7; }
 
-/* ─── Sections ───────────────────────────────────────────────────────── */
+/* Sections */
 .detail-section { margin-bottom: 3rem; }
-.section-title {
-  display: flex; align-items: center; gap: 0.75rem;
-  font-size: 0.75rem; letter-spacing: 0.15em; text-transform: uppercase;
-  color: var(--muted); margin-bottom: 1.25rem;
-  padding-bottom: 0.5rem; border-bottom: 1px solid var(--paper-mid);
-}
+.section-title { display: flex; align-items: center; gap: 0.75rem; font-size: 0.75rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); margin-bottom: 1.25rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--paper-mid); }
 .section-count { background: var(--paper-dark); border-radius: 20px; padding: 0.1rem 0.5rem; font-size: 0.7rem; }
 
-/* ─── Lectures ───────────────────────────────────────────────────────── */
+/* Lectures */
 .readings { display: flex; flex-direction: column; gap: 1.5rem; }
 .reading-group { display: flex; align-items: flex-start; gap: 1.5rem; flex-wrap: wrap; }
 .reading-type-wrap { display: flex; align-items: center; gap: 0.5rem; width: 200px; flex-shrink: 0; padding-top: 0.3rem; }
 .reading-type { font-size: 0.75rem; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
-.tooltip-wrap { position: relative; display: inline-flex; }
-.tooltip-icon {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--muted);
-  font-size: 0.65rem; color: var(--muted); cursor: help; line-height: 1; transition: all 0.2s; flex-shrink: 0;
-}
-.tooltip-icon:hover { border-color: var(--vermilion); color: var(--vermilion); }
-.tooltip-box {
-  display: none; position: absolute; bottom: calc(100% + 8px); left: 50%;
-  transform: translateX(-50%); background: var(--ink); color: var(--paper);
-  font-family: var(--font-body); font-size: 0.78rem; line-height: 1.6;
-  padding: 0.75rem 1rem; border-radius: var(--radius); width: 240px;
-  z-index: 100; box-shadow: var(--shadow-lg); pointer-events: none;
-}
-.tooltip-box::after {
-  content: ''; position: absolute; top: 100%; left: 50%;
-  transform: translateX(-50%); border: 6px solid transparent; border-top-color: var(--ink);
-}
-.tooltip-wrap:hover .tooltip-box { display: block; }
 .reading-chips { display: flex; flex-wrap: wrap; gap: 0.6rem; }
-.reading-chip {
-  display: flex; flex-direction: column; align-items: center;
-  padding: 0.6rem 1.2rem; border-radius: var(--radius);
-  border: 1px solid var(--paper-mid); min-width: 64px; text-align: center;
-}
+.reading-chip { display: flex; flex-direction: column; align-items: center; padding: 0.6rem 1.2rem; border-radius: var(--radius); border: 1px solid var(--paper-mid); min-width: 64px; text-align: center; }
 .reading-on  { background: #fdf5f5; border-color: #f0c0b8; }
 .reading-kun { background: #f5f8fd; border-color: #90aad4; }
 .reading-kana   { font-size: 1.4rem; line-height: 1.2; margin-bottom: 0.25rem; }
 .reading-romaji { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.06em; }
 
-/* ─── Mots composés ──────────────────────────────────────────────────── */
+/* Mots */
 .words-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; }
-.word-card {
-  display: flex; flex-direction: column; gap: 0.25rem;
-  padding: 1rem 1.25rem; background: white;
-  border: 1px solid var(--paper-mid); border-radius: var(--radius);
-  text-decoration: none; color: var(--ink); transition: all 0.2s;
-}
+.word-card { display: flex; flex-direction: column; gap: 0.25rem; padding: 1rem 1.25rem; background: white; border: 1px solid var(--paper-mid); border-radius: var(--radius); text-decoration: none; color: var(--ink); transition: all 0.2s; }
 .word-card:hover { border-color: var(--ink); transform: translateY(-2px); box-shadow: var(--shadow); }
-.word-jp      { font-size: 1.3rem; line-height: 1.2; }
+.word-jp { font-size: 1.3rem; line-height: 1.2; }
 .word-reading { font-size: 0.75rem; color: var(--muted); }
-.word-en      { font-size: 0.8rem; color: var(--ink-light); line-height: 1.5; margin-top: 0.2rem; }
+.word-en { font-size: 0.8rem; color: var(--ink-light); line-height: 1.5; margin-top: 0.2rem; }
 .pagination-simple { display: flex; align-items: center; justify-content: center; gap: 1.5rem; margin-top: 1.5rem; }
-.pagination-simple button {
-  padding: 0.4rem 1rem; border: 1px solid var(--paper-mid);
-  background: white; border-radius: var(--radius);
-  font-family: var(--font-display); font-size: 0.85rem; cursor: pointer; transition: all 0.2s;
-}
+.pagination-simple button { padding: 0.4rem 1rem; border: 1px solid var(--paper-mid); background: white; border-radius: var(--radius); font-family: var(--font-display); font-size: 0.85rem; cursor: pointer; transition: all 0.2s; }
 .pagination-simple button:hover:not(:disabled) { border-color: var(--ink); background: var(--ink); color: var(--paper); }
 .pagination-simple button:disabled { opacity: 0.35; cursor: not-allowed; }
 .pagination-simple span { font-size: 0.85rem; color: var(--muted); }
 
-/* ─── Exemples ───────────────────────────────────────────────────────── */
+/* Exemples */
 .examples-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
-.example-card {
-  padding: 1rem 1.25rem; background: white;
-  border: 1px solid var(--paper-mid); border-left: 3px solid var(--vermilion);
-  border-radius: var(--radius); position: relative;
-}
+.example-card { padding: 1rem 1.25rem; background: white; border: 1px solid var(--paper-mid); border-left: 3px solid var(--vermilion); border-radius: var(--radius); position: relative; }
 .example-jp { display: block; font-size: 1rem; margin-bottom: 0.4rem; line-height: 1.6; }
 .example-en { font-size: 0.82rem; color: var(--ink-light); font-style: italic; }
-.audio-btn {
-  position: absolute; top: 0.75rem; right: 0.75rem;
-  background: var(--paper-dark); border: 1px solid var(--paper-mid);
-  border-radius: 50%; width: 28px; height: 28px;
-  font-size: 0.7rem; cursor: pointer; color: var(--vermilion); transition: all 0.2s;
-}
+.audio-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--paper-dark); border: 1px solid var(--paper-mid); border-radius: 50%; width: 28px; height: 28px; font-size: 0.7rem; cursor: pointer; color: var(--vermilion); transition: all 0.2s; }
 .audio-btn:hover { background: var(--vermilion); color: white; border-color: var(--vermilion); }
 
 .loading-sm { padding: 2rem; text-align: center; color: var(--muted); }
@@ -421,7 +394,7 @@ function truncate(str, len = 50) {
   .stroke-container { width: 150px; height: 150px; margin: 0 auto; }
   .stroke-toggle { margin: 0.75rem auto 0; }
   .reading-type-wrap { width: auto; }
-  .tooltip-box { left: 0; right: auto; transform: none; }
+  .tooltip-box { left: 0; transform: none; }
   .tooltip-box::after { left: 12px; }
 }
 </style>
