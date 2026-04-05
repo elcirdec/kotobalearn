@@ -7,15 +7,18 @@ export const useKanjiStore = defineStore('kanji', () => {
   const loading   = ref(false)
   const page      = ref(0)
 
-  const searchInput       = ref('')
-  const selectedJlpt      = ref('')
+  const searchInput        = ref('')
+  const selectedJlpt       = ref('')
   const selectedGradeGroup = ref('')   // 'primaire' | 'secondaire' | 'prenoms' | ''
-  const selectedStrokes   = ref('')
-  const selectedRadicals  = ref([])
+  const selectedStrokes    = ref('')
+  const selectedRadicals   = ref([])
 
   const radicals        = ref([])
   const radicalsLoaded  = ref(false)
   const returnFromChild = ref(false)
+
+  // Liste des nombres de traits disponibles selon les filtres actifs
+  const strokeCounts = ref([])
 
   const PAGE_SIZE  = 40
   const totalPages = computed(() => Math.ceil(allKanji.value.length / PAGE_SIZE))
@@ -46,6 +49,31 @@ export const useKanjiStore = defineStore('kanji', () => {
     }
   }
 
+  /**
+   * Charge les nombres de traits disponibles EN TENANT COMPTE des filtres actifs.
+   * Si jlpt="N1" est sélectionné, seuls les traits qui existent en N1 sont proposés.
+   * Si le trait actuellement sélectionné n'existe plus dans la nouvelle liste, il est réinitialisé.
+   */
+  async function loadStrokeCounts() {
+    try {
+      const params = {}
+      if (selectedJlpt.value)       params.jlpt       = selectedJlpt.value
+      if (selectedGradeGroup.value) params.gradeGroup  = selectedGradeGroup.value
+
+      const counts = await kanjiApi.getStrokeCounts(params)
+      strokeCounts.value = counts
+
+      // Si le trait sélectionné n'existe plus dans la liste filtrée, on le retire
+      if (selectedStrokes.value !== '' && !counts.includes(Number(selectedStrokes.value))) {
+        selectedStrokes.value = ''
+      }
+    } catch (e) {
+      console.error('Erreur chargement nombres de traits', e)
+      // Fallback minimal si l'API échoue
+      strokeCounts.value = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,32,33,34]
+    }
+  }
+
   async function fetchKanji() {
     loading.value = true
     page.value    = 0
@@ -68,8 +96,22 @@ export const useKanjiStore = defineStore('kanji', () => {
     }
   }
 
-  function setJlpt(j)       { selectedJlpt.value       = j; fetchKanji() }
-  function setGradeGroup(g) { selectedGradeGroup.value  = g; fetchKanji() }
+  // Quand JLPT change → recharger les traits disponibles ET les kanji
+  function setJlpt(j) {
+    selectedJlpt.value = j
+    selectedStrokes.value = ''   // reset le filtre traits (peut ne plus être valide)
+    loadStrokeCounts()           // recalcule la liste selon le nouveau JLPT
+    fetchKanji()
+  }
+
+  // Quand le groupe de grade change → idem
+  function setGradeGroup(g) {
+    selectedGradeGroup.value = g
+    selectedStrokes.value = ''   // reset le filtre traits
+    loadStrokeCounts()           // recalcule la liste selon le nouveau groupe
+    fetchKanji()
+  }
+
   function setStrokes(s)    { selectedStrokes.value     = s; fetchKanji() }
 
   function toggleRadical(r) {
@@ -96,6 +138,7 @@ export const useKanjiStore = defineStore('kanji', () => {
     searchInput.value = ''; selectedJlpt.value = ''
     selectedGradeGroup.value = ''; selectedStrokes.value = ''
     selectedRadicals.value = []
+    loadStrokeCounts()   // recharge la liste complète sans filtre
   }
 
   const hasActiveFilters = computed(() =>
@@ -108,7 +151,9 @@ export const useKanjiStore = defineStore('kanji', () => {
     searchInput, selectedJlpt, selectedGradeGroup, selectedStrokes, selectedRadicals,
     radicals, radicalsByStrokes, radicalsLoaded,
     returnFromChild, totalPages, pagedKanji, hasSearched, hasActiveFilters,
+    strokeCounts,
     loadRadicals, fetchKanji,
+    loadStrokeCounts,
     setJlpt, setGradeGroup, setStrokes,
     toggleRadical, addRadicalById, removeRadical, clear
   }

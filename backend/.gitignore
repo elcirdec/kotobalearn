@@ -48,3 +48,6 @@ Thumbs.db
 **/data/**
 # Mais garder le README-data.md (ou tout autre fichier README)
 !**/data/README-data.md
+
+# AnimCJK SVGs (trop lourd pour git, ~150 Mo)
+src/main/resources/static/animcjk/**

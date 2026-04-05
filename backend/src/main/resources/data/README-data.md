@@ -10,3 +10,5 @@ Ces fichiers ne sont pas versionnés. Télécharge-les avant de lancer les impor
 | kanjidic2.xml | EDRDG (CC BY-SA 4.0) | https://www.edrdg.org/pub/Nihongo/JMdict_e_examp.gz
 | **jlpt/original_data/n1.csv … n5.csv** | stephenmk/yomitan-jlpt-vocab (CC BY-SA 4.0) | [https://github.com/stephenmk/yomitan-jlpt-vocab](https://github.com/stephenmk/yomitan-jlpt-vocab) (fichiers dans `original_data/`) |
 | kradfile, kradfile2, radkfile, radkfile2 | EDRDG (CC BY-SA 4.0) |https://www.edrdg.org/pub/Nihongo/kradzip.zip |
+| `kanji-data.json` | davidluzgouveia (MIT) | https://raw.githubusercontent.com/davidluzgouveia/kanji-data/master/kanji.json |
+| `jlpt/original_data/n1-n5.csv` | stephenmk (CC BY-SA 4.0) | https://github.com/stephenmk/yomitan-jlpt-vocab |

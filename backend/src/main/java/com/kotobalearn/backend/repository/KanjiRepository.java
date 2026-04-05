@@ -17,12 +17,9 @@ public interface KanjiRepository extends JpaRepository<Kanji, Integer> {
     List<Kanji> findByKanjiStrokes(Integer strokes);
     List<Kanji> findByKanjiMeaningEnglishContainingIgnoreCase(String meaning);
 
-    // ── Recherche par radical principal (rad_id) ───────────────────────────
     @Query("SELECT k FROM Kanji k WHERE k.radical.radId IN :radIds")
     List<Kanji> findByRadicalIds(@Param("radIds") List<Integer> radIds);
 
-    // ── Recherche multi-composants AND via kanji_component ─────────────────
-    // Trouve les kanji qui contiennent TOUS les composants sélectionnés
     @Query("""
         SELECT k FROM Kanji k
         WHERE (
@@ -37,13 +34,12 @@ public interface KanjiRepository extends JpaRepository<Kanji, Integer> {
         @Param("radCount") long radCount
     );
 
-    // ── Combinaisons JLPT + Grade ──────────────────────────────────────────
     @Query("SELECT k FROM Kanji k WHERE k.jlptLevel.jlptCode = :jlpt AND k.kanjiGrade = :grade")
     List<Kanji> findByJlptAndGrade(@Param("jlpt") String jlpt, @Param("grade") Integer grade);
 
     @Query("SELECT k FROM Kanji k WHERE k.jlptLevel.jlptCode = :jlpt AND k.kanjiGrade IN :grades")
     List<Kanji> findByJlptAndGradeIn(@Param("jlpt") String jlpt, @Param("grades") List<Integer> grades);
-    // ── Combinaisons Strokes ───────────────────────────────────────────────
+
     @Query("SELECT k FROM Kanji k WHERE k.kanjiStrokes = :s AND k.jlptLevel.jlptCode = :jlpt")
     List<Kanji> findByStrokesAndJlpt(@Param("s") Integer s, @Param("jlpt") String jlpt);
 
@@ -55,4 +51,8 @@ public interface KanjiRepository extends JpaRepository<Kanji, Integer> {
 
     @Query("SELECT k FROM Kanji k WHERE k.kanjiStrokes = :s AND k.kanjiGrade IN :grades")
     List<Kanji> findByStrokesAndGradeIn(@Param("s") Integer s, @Param("grades") List<Integer> grades);
+
+    // Seule requête stroke-counts conservée — celle d'origine qui fonctionne
+    @Query("SELECT DISTINCT k.kanjiStrokes FROM Kanji k WHERE k.kanjiStrokes IS NOT NULL ORDER BY k.kanjiStrokes")
+    List<Integer> findDistinctStrokeCounts();
 }

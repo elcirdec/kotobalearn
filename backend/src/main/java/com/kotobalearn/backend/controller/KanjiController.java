@@ -65,6 +65,24 @@ public class KanjiController {
     }
 
     /**
+     * GET /api/kanji/stroke-counts
+     * GET /api/kanji/stroke-counts?jlpt=N1
+     * GET /api/kanji/stroke-counts?gradeGroup=primaire
+     * GET /api/kanji/stroke-counts?jlpt=N2&gradeGroup=secondaire
+     *
+     * Retourne uniquement les nombres de traits qui existent pour les filtres actifs.
+     * Évite d'afficher des options inutiles dans le sélecteur (ex: 29 traits n'existe pas en N5).
+     */
+    @GetMapping("/stroke-counts")
+    public List<Integer> getStrokeCounts(
+        @RequestParam(required = false) String jlpt,
+        @RequestParam(required = false) String gradeGroup
+    ) {
+        List<Integer> grades = resolveGrades(gradeGroup);
+        return kanjiService.findDistinctStrokeCounts(jlpt, grades);
+    }
+
+    /**
      * Convertit un gradeGroup en liste de grades SQL.
      * primaire   → 1, 2, 3, 4, 5, 6
      * secondaire → 8

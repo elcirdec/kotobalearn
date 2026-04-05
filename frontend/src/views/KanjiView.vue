@@ -38,7 +38,7 @@
 
           <div class="filter-bar-sep">·</div>
 
-          <!-- Niveau scolaire (groupes logiques) -->
+          <!-- Niveau scolaire -->
           <div class="filter-unit">
             <span class="filter-bar-label">Niveau scolaire</span>
             <div class="toggles">
@@ -88,7 +88,7 @@
 
           <div class="filter-bar-sep">·</div>
 
-          <!-- Traits -->
+          <!-- Traits (menu déroulant dynamique) -->
           <div class="filter-unit" ref="strokesRef">
             <span class="filter-bar-label">Traits</span>
             <div class="dropdown-wrap">
@@ -100,7 +100,7 @@
               <div class="dropdown-list" v-if="showStrokes">
                 <button class="dropdown-item" :class="{ active: store.selectedStrokes === '' }"
                   @click="pickStroke('')">Tous</button>
-                <button v-for="s in strokeOptions" :key="s"
+                <button v-for="s in store.strokeCounts" :key="s"
                   class="dropdown-item" :class="{ active: store.selectedStrokes === String(s) }"
                   @click="pickStroke(String(s))">{{ s }} trait{{ s > 1 ? 's' : '' }}</button>
               </div>
@@ -219,13 +219,18 @@ import { useKanjiStore } from '../stores/kanji'
 const store = useKanjiStore()
 const route = useRoute()
 
-const strokeOptions   = Array.from({ length: 64 }, (_, i) => i + 1)
 const showStrokes     = ref(false)
 const showRadicalGrid = ref(false)
 const strokesRef      = ref(null)
 
-function pickStroke(s) { showStrokes.value = false; store.setStrokes(s) }
-function isSelected(id) { return store.selectedRadicals.some(r => r.radId === id) }
+function pickStroke(s) { 
+  showStrokes.value = false
+  store.setStrokes(s)
+}
+
+function isSelected(id) {
+  return store.selectedRadicals.some(r => r.radId === id)
+}
 
 const gradeGroupLabel = (g) => ({
   primaire:   'Primaire (1-6)',
@@ -252,6 +257,7 @@ onBeforeRouteLeave((to) => {
 onMounted(async () => {
   document.addEventListener('click', handleClickOutside)
   await store.loadRadicals()
+  await store.loadStrokeCounts()    // ← Chargement dynamique des nombres de traits
 
   const radicalIdsParam = route.query.radicalIds
   if (radicalIdsParam) {
@@ -288,6 +294,7 @@ function truncate(str, len = 28) {
 </script>
 
 <style scoped>
+/* (tous les styles restent identiques à ceux que vous aviez) */
 .page-header { margin-bottom: 2rem; }
 .page-eyebrow { font-family: var(--font-jp); font-size: 0.9rem; color: var(--vermilion); letter-spacing: 0.1em; margin-bottom: 0.5rem; }
 .page-header h1 { font-size: clamp(2rem, 4vw, 3rem); }
@@ -309,7 +316,6 @@ function truncate(str, len = 28) {
 .toggle:hover { border-color: var(--ink); color: var(--ink); }
 .toggle.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 
-/* Tooltip (même style que on/kun-yomi) */
 .tooltip-wrap { position: relative; display: inline-flex; }
 .tooltip-box {
   display: none;
