@@ -10,12 +10,45 @@
 
         <header class="detail-header">
           <div class="detail-main">
-            <h1 class="detail-jp jp">{{ word.wordJapanese }}</h1>
+
+            <!-- Titre : chaque kanji est cliquable avec tooltip enrichi -->
+            <h1 class="detail-jp jp">
+              <template v-for="(ch, i) in wordChars" :key="i">
+                <RouterLink
+                  v-if="kanjiInfos[ch]"
+                  :to="`/kanji/${kanjiInfos[ch].id}`"
+                  class="kanji-link"
+                  :title="`Voir le kanji ${ch} : ${kanjiInfos[ch].meaning || 'signification inconnue'}`"
+                >{{ ch }}</RouterLink>
+                <span v-else>{{ ch }}</span>
+              </template>
+            </h1>
+
             <div class="detail-reading">{{ word.wordReading }}</div>
             <div class="detail-jlpt" v-if="word.jlptLevel">{{ word.jlptLevel }}</div>
           </div>
           <div class="detail-stamp" aria-hidden="true">語</div>
         </header>
+
+        <!-- Player de tracé du mot entier -->
+        <section class="detail-section stroke-section">
+          <div class="section-title-row">
+            <h2 class="section-title">Tracé du mot</h2>
+            <button class="toggle-player-btn" @click="showPlayer = !showPlayer">
+              {{ showPlayer ? 'Masquer' : 'Afficher' }}
+            </button>
+          </div>
+
+          <Transition name="fade-player">
+            <div v-if="showPlayer" class="player-wrap">
+              <CompoundStrokePlayer
+                :characters="word.wordJapanese"
+                type="word"
+                :key="word.wordJapanese"
+              />
+            </div>
+          </Transition>
+        </section>
 
         <section class="detail-section">
           <h2 class="section-title">Signification</h2>
@@ -78,30 +111,67 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { wordsApi } from '../api'
+import { wordsApi, kanjiApi } from '../api'
+import CompoundStrokePlayer from '../components/CompoundStrokePlayer.vue'
 
 const route   = useRoute()
 const word    = ref(null)
 const loading = ref(true)
 
+const showPlayer = ref(false)
+
+// Stockage des informations des kanji (id + signification)
+const kanjiInfos = ref({})
+
+// ── Détection kanji (même logique que CompoundStrokePlayer) ───────────────
+function isKanji(char) {
+  const cp = char.codePointAt(0)
+  return (cp >= 0x4E00 && cp <= 0x9FFF)
+      || (cp >= 0x3400 && cp <= 0x4DBF)
+      || (cp >= 0x20000 && cp <= 0x2A6DF)
+      || (cp >= 0xF900 && cp <= 0xFAFF)
+}
+
+// ── Chargement ────────────────────────────────────────────────────────────
 onMounted(async () => {
   try {
     word.value = await wordsApi.get(route.params.id)
+
+    // Extraire les kanji uniques du mot
+    const uniqueKanji = [...new Set([...word.value.wordJapanese].filter(isKanji))]
+
+    // Charger les informations (id et signification) de chaque kanji
+    const results = await Promise.allSettled(
+      uniqueKanji.map(char => kanjiApi.getByCharacter(char))
+    )
+
+    results.forEach((res, i) => {
+      if (res.status === 'fulfilled' && res.value?.kanjiId) {
+        kanjiInfos.value[uniqueKanji[i]] = {
+          id: res.value.kanjiId,
+          meaning: res.value.kanjiMeaningEnglish || ''
+        }
+      }
+    })
   } finally {
     loading.value = false
   }
 })
 
+// Découpage du mot en caractères individuels pour le template
+const wordChars = computed(() =>
+  word.value ? [...word.value.wordJapanese] : []
+)
+
+// ── Tags ──────────────────────────────────────────────────────────────────
 const groupedTags = computed(() => {
   if (!word.value?.tags) return {}
-  // Ordre d'affichage souhaité
   const order = ['pos', 'field', 'misc', 'dial', 'ke_inf']
   const groups = word.value.tags.reduce((acc, t) => {
     if (!acc[t.tagType]) acc[t.tagType] = []
     acc[t.tagType].push(t)
     return acc
   }, {})
-  // Retrier selon l'ordre défini
   return Object.fromEntries(
     order.filter(k => groups[k]).map(k => [k, groups[k]])
   )
@@ -119,6 +189,7 @@ function typeLabel(type) {
 </script>
 
 <style scoped>
+/* Styles inchangés */
 .back-link {
   display: inline-block;
   margin-bottom: 2rem;
@@ -140,7 +211,29 @@ function typeLabel(type) {
   padding-bottom: 2rem;
   border-bottom: 1px solid var(--paper-mid);
 }
-.detail-jp { font-size: clamp(3rem, 8vw, 6rem); font-weight: 300; line-height: 1; margin-bottom: 0.5rem; }
+.detail-jp {
+  font-size: clamp(3rem, 8vw, 6rem);
+  font-weight: 300;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+/* Kanji cliquables dans le titre */
+.kanji-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.18s, border-color 0.18s;
+  line-height: 1;
+}
+.kanji-link:hover {
+  color: var(--vermilion);
+  border-bottom-color: var(--vermilion);
+}
+
 .detail-reading { font-size: 1rem; color: var(--muted); margin-bottom: 0.75rem; letter-spacing: 0.06em; }
 .detail-jlpt {
   display: inline-block;
@@ -163,6 +256,7 @@ function typeLabel(type) {
 }
 
 .detail-section { margin-bottom: 2.5rem; }
+
 .section-title {
   display: flex;
   align-items: center;
@@ -181,6 +275,53 @@ function typeLabel(type) {
   padding: 0.1rem 0.5rem;
   font-size: 0.7rem;
 }
+
+/* Section player */
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--paper-mid);
+}
+.section-title-row .section-title {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.toggle-player-btn {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  padding: 0.25rem 0.75rem;
+  background: white;
+  border: 1px solid var(--paper-mid);
+  border-radius: var(--radius);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.toggle-player-btn:hover {
+  border-color: var(--vermilion);
+  color: var(--vermilion);
+}
+
+.player-wrap {
+  display: flex;
+  justify-content: flex-start;
+  padding: 1.25rem;
+  background: var(--paper-dark);
+  border: 1px solid var(--paper-mid);
+  border-radius: var(--radius);
+}
+
+/* Transition affichage/masquage player */
+.fade-player-enter-active,
+.fade-player-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
+.fade-player-enter-from,
+.fade-player-leave-to { opacity: 0; transform: translateY(-6px); }
+
 .detail-translation { font-size: 1.1rem; line-height: 1.8; }
 .detail-translation-fr { margin-top: 0.5rem; font-size: 1rem; color: var(--ink-light); font-style: italic; }
 
@@ -197,7 +338,6 @@ function typeLabel(type) {
 }
 .tags-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
-/* Tags cliquables */
 .tag-clickable {
   text-decoration: none;
   transition: all 0.2s ease;
@@ -209,7 +349,6 @@ function typeLabel(type) {
   filter: brightness(0.92);
 }
 
-/* Exemples */
 .examples { display: flex; flex-direction: column; gap: 1.5rem; }
 .example {
   padding: 1.5rem;
