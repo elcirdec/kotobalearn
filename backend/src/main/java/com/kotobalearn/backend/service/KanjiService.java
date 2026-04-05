@@ -26,15 +26,10 @@ public class KanjiService {
     private final KanjiRepository          kanjiRepository;
     private final KanjiComponentRepository componentRepository;
 
-    /**
-     * @param grades liste de grades (ex: [1,2,3,4,5,6] pour primaire, [8] pour secondaire)
-     *               null = pas de filtre grade
-     */
     public List<KanjiSummaryDto> findByCriteria(
         String jlpt, List<Integer> grades, Integer strokes,
         List<Integer> radicalIds, String search
     ) {
-        // Valeurs sécurisées (jamais null)
         String safeJlpt = jlpt == null ? "" : jlpt;
         List<Integer> safeRadicalIds = radicalIds == null ? List.of() : radicalIds;
         List<Integer> safeGrades = grades == null ? List.of() : grades;
@@ -53,7 +48,6 @@ public class KanjiService {
         if (hasRadicals) {
             base = kanjiRepository.findByAllComponents(radicalIds, (long) safeRadicalIds.size());
         } else if (hasStrokes && hasJlpt && hasGrades) {
-            // Strokes + JLPT + grades : filter en mémoire
             final List<Integer> g = safeGrades;
             base = kanjiRepository.findByStrokesAndJlpt(strokes, jlpt).stream()
                 .filter(k -> k.getKanjiGrade() != null && g.contains(k.getKanjiGrade()))
@@ -76,15 +70,14 @@ public class KanjiService {
 
         Stream<Kanji> stream = base.stream();
 
-        // Filtres supplémentaires si radicaux + autres critères
         if (hasRadicals && (hasJlpt || hasGrades || hasStrokes)) {
             final List<Integer> g = safeGrades;
             stream = stream.filter(k -> {
                 boolean ok = true;
-                if (hasJlpt)   ok = ok && k.getJlptLevel() != null
-                                       && safeJlpt.equals(k.getJlptLevel().getJlptCode());
-                if (hasGrades) ok = ok && k.getKanjiGrade() != null
-                                       && g.contains(k.getKanjiGrade());
+                if (hasJlpt)    ok = ok && k.getJlptLevel() != null
+                                        && safeJlpt.equals(k.getJlptLevel().getJlptCode());
+                if (hasGrades)  ok = ok && k.getKanjiGrade() != null
+                                        && g.contains(k.getKanjiGrade());
                 if (hasStrokes) ok = ok && safeStrokes.equals(k.getKanjiStrokes());
                 return ok;
             });
@@ -125,7 +118,41 @@ public class KanjiService {
             .orElseThrow(() -> new NoSuchElementException("Kanji not found: " + character)));
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────
+    /**
+     * Retourne les nombres de traits disponibles filtrés par jlpt et/ou grades.
+     *
+     * N'utilise AUCUNE nouvelle requête JPQL — s'appuie sur les méthodes
+     * de repository existantes et filtre les stroke counts en Java.
+     * Si aucun filtre : délègue à la requête SQL dédiée (plus efficace).
+     */
+    public List<Integer> findDistinctStrokeCounts(String jlpt, List<Integer> grades) {
+        boolean hasJlpt   = jlpt   != null && !jlpt.isBlank();
+        boolean hasGrades = grades != null && !grades.isEmpty();
+
+        // Cas sans filtre : requête SQL dédiée (rapide, retourne juste les entiers)
+        if (!hasJlpt && !hasGrades) {
+            return kanjiRepository.findDistinctStrokeCounts();
+        }
+
+        // Cas avec filtre : récupère la liste filtrée, extrait les traits distincts en Java
+        List<Kanji> kanji;
+        if (hasJlpt && hasGrades) {
+            kanji = kanjiRepository.findByJlptAndGradeIn(jlpt, grades);
+        } else if (hasJlpt) {
+            kanji = kanjiRepository.findByJlptLevel_JlptCode(jlpt);
+        } else {
+            kanji = kanjiRepository.findByKanjiGradeIn(grades);
+        }
+
+        return kanji.stream()
+            .map(Kanji::getKanjiStrokes)
+            .filter(s -> s != null)
+            .distinct()
+            .sorted()
+            .toList();
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
 
     private int rankMeaning(String meaning, String q) {
         if (meaning == null) return 4;
@@ -135,7 +162,7 @@ public class KanjiService {
         return 3;
     }
 
-    // ── Mappers ────────────────────────────────────────────────────────────
+    // ── Mappers ────────────────────────────────────────────────────────────────
 
     private KanjiSummaryDto toSummaryDto(Kanji k) {
         KanjiSummaryDto dto = new KanjiSummaryDto();
