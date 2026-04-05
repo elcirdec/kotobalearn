@@ -12,16 +12,15 @@ async function get(path, params = {}) {
 }
 
 export const wordsApi = {
-  list: (params)     => get('/words', params),
-  get:  (id)         => get(`/words/${id}`),
+  list: (params) => get('/words', params),
+  get:  (id)     => get(`/words/${id}`),
 }
 
 export const kanjiApi = {
-  list:  (params)     => get('/kanji', params),
-  get:   (id)         => get(`/kanji/${id}`),
-  words: (id, params) => get(`/kanji/${id}/words`, params),
-  // Accepte les mêmes filtres que la liste : { jlpt, gradeGroup }
-  // → retourne uniquement les traits qui existent pour ces filtres
+  list:           (params) => get('/kanji', params),
+  get:            (id)     => get(`/kanji/${id}`),
+  getByCharacter: (char)   => get(`/kanji/character/${encodeURIComponent(char)}`),
+  words:          (id, params) => get(`/kanji/${id}/words`, params),
   getStrokeCounts: (params = {}) => get('/kanji/stroke-counts', params),
 }
 

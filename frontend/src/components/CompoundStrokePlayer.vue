@@ -6,28 +6,24 @@
       </div>
 
       <template v-else>
-        <div v-for="(cd, ci) in chars" :key="ci" class="svg-wrap">
-          <svg :viewBox="cd.viewBox" xmlns="http://www.w3.org/2000/svg" class="svg-canvas">
+        <div v-for="(cd, ci) in chars" :key="ci" class="svg-wrap" :class="{ 'svg-wrap--error': cd.missing }">
+          <!-- Caractère non traceable (ponctuation, espace…) : affichage texte -->
+          <div v-if="cd.missing" class="svg-text-char jp">{{ cd.char }}</div>
 
-            <!-- Fills : tous les sous-segments d'un groupe s'allument ensemble -->
+          <svg v-else :viewBox="cd.viewBox" xmlns="http://www.w3.org/2000/svg" class="svg-canvas">
             <g :transform="cd.groupTransform">
               <template v-for="(group, gIdx) in cd.strokeGroups" :key="`g-${ci}-${gIdx}`">
                 <path
                   v-for="(d, sIdx) in group.fills"
                   :key="`f-${ci}-${gIdx}-${sIdx}`"
                   :d="d"
-                  :fill="groupFill(ci, gIdx)"
+                  :fill="segFill(ci, gIdx, sIdx)"
                 />
               </template>
             </g>
-
-            <!-- Médian animé : uniquement le premier sous-segment de chaque groupe -->
-            <g
-              v-if="anim.charIdx === ci && anim.groupIdx >= 0"
-              :transform="cd.groupTransform"
-            >
+            <g v-if="anim.charIdx === ci && anim.groupIdx >= 0" :transform="cd.groupTransform">
               <path
-                :d="cd.strokeGroups[anim.groupIdx]?.medians[0] ?? ''"
+                :d="cd.strokeGroups[anim.groupIdx]?.medians[anim.segIdx] ?? ''"
                 stroke="var(--vermilion)"
                 stroke-width="16"
                 fill="none"
@@ -36,15 +32,14 @@
                 :style="{ strokeDasharray: animDashArray, strokeDashoffset: animDashOffset }"
               />
             </g>
-
           </svg>
         </div>
       </template>
     </div>
 
     <div class="controls" v-if="!isLoading && totalStrokes > 0">
-      <button class="ctrl-btn" @click="goToFirst" :disabled="currentStroke === 0">⏮</button>
-      <button class="ctrl-btn" @click="prevStroke" :disabled="currentStroke === 0">◀</button>
+      <button class="ctrl-btn" @click="goToFirst" :disabled="currentStroke === 0 && currentSubSeg === 0">⏮</button>
+      <button class="ctrl-btn" @click="prevStroke" :disabled="currentStroke === 0 && currentSubSeg === 0">◀</button>
       <button class="ctrl-btn ctrl-play" @click="togglePlay">{{ isPlaying ? '⏸' : '▶' }}</button>
       <button class="ctrl-btn" @click="nextStroke" :disabled="currentStroke >= totalStrokes">▶</button>
       <button class="ctrl-btn" @click="goToLast"   :disabled="currentStroke >= totalStrokes">⏭</button>
@@ -61,19 +56,58 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 
 const props = defineProps({
   characters: { type: String, required: true },
-  type:       { type: String, default: 'kanji' },
+  // 'kana' | 'kanji' | 'word'
+  // 'word' = détection automatique par caractère (kanji + kana mélangés)
+  type: { type: String, default: 'kanji' },
 })
 
 const chars     = ref([])
 const isLoading = ref(true)
-const currentStroke = ref(0)
-const isPlaying     = ref(false)
+
+const currentStroke  = ref(0)
+const currentSubSeg  = ref(0)
+const isPlaying      = ref(false)
 const animDashArray  = ref(0)
 const animDashOffset = ref(0)
-const anim = ref({ charIdx: -1, groupIdx: -1 })
+const anim = ref({ charIdx: -1, groupIdx: -1, segIdx: -1 })
 
 let playTimer = null
 let animFrame = null
+
+// ── Détection du type de caractère ────────────────────────────────────────
+
+function isKanjiChar(char) {
+  const cp = char.codePointAt(0)
+  return (cp >= 0x4E00 && cp <= 0x9FFF)    // CJK Unified Ideographs (bloc principal)
+      || (cp >= 0x3400 && cp <= 0x4DBF)    // CJK Extension A
+      || (cp >= 0x20000 && cp <= 0x2A6DF)  // CJK Extension B
+      || (cp >= 0xF900 && cp <= 0xFAFF)    // CJK Compatibility Ideographs
+}
+
+function isKanaChar(char) {
+  const cp = char.codePointAt(0)
+  return (cp >= 0x3040 && cp <= 0x309F)   // Hiragana
+      || (cp >= 0x30A0 && cp <= 0x30FF)   // Katakana
+}
+
+function isAnimatable(char) {
+  return isKanjiChar(char) || isKanaChar(char)
+}
+
+function charFolder(char) {
+  if (isKanaChar(char)) return { folder: 'kana', subFolder: 'svgsJaKana' }
+  return { folder: 'kanji', subFolder: 'svgsJa' }
+}
+
+// En mode type fixe ('kana' ou 'kanji'), on utilise le dossier déclaré
+function getFolder(char) {
+  if (props.type === 'word') return charFolder(char)
+  const folder    = props.type === 'kana' ? 'kana'       : 'kanji'
+  const subFolder = props.type === 'kana' ? 'svgsJaKana' : 'svgsJa'
+  return { folder, subFolder }
+}
+
+// ── Chargement ────────────────────────────────────────────────────────────
 
 const charCount = computed(() => [...props.characters].length || 1)
 
@@ -82,28 +116,38 @@ function charToFilename(char) {
 }
 
 async function loadAll(characters) {
-  isLoading.value = true
+  isLoading.value     = true
   stopPlay()
-  chars.value = []
+  chars.value         = []
   currentStroke.value = 0
+  currentSubSeg.value = 0
 
   const charList = [...characters]
-  const folder = props.type === 'kana' ? 'kana' : 'kanji'
-  const subFolder = props.type === 'kana' ? 'svgsJaKana' : 'svgsJa'
 
+  // En mode 'word', on ne tente de charger que les caractères animatables
+  // Les autres (ponctuation, chiffres, espace…) sont affichés en texte
   const results = await Promise.allSettled(
-    charList.map(char =>
-      fetch(`/animcjk/${folder}/${subFolder}/${charToFilename(char)}`)
+    charList.map(char => {
+      if (props.type === 'word' && !isAnimatable(char)) {
+        // Résolution immédiate avec marqueur "manquant"
+        return Promise.resolve({ missing: true, char })
+      }
+      const { folder, subFolder } = getFolder(char)
+      return fetch(`/animcjk/${folder}/${subFolder}/${charToFilename(char)}`)
         .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text() })
-    )
+    })
   )
 
   chars.value = results.map((res, i) => {
+    // Caractère non-animatable (résolution immédiate avec {missing,char})
+    if (res.status === 'fulfilled' && res.value?.missing) {
+      return { missing: true, char: res.value.char, viewBox: '', groupTransform: '', strokeGroups: [] }
+    }
     if (res.status === 'rejected') {
       console.warn(`[CompoundStrokePlayer] SVG manquant : ${charList[i]}`, res.reason)
-      return { viewBox: '0 0 109 109', groupTransform: '', strokeGroups: [] }
+      return { missing: false, char: charList[i], viewBox: '0 0 109 109', groupTransform: '', strokeGroups: [] }
     }
-    return parseSvg(res.value)
+    return { missing: false, char: charList[i], ...parseSvg(res.value) }
   })
 
   currentStroke.value = totalStrokes.value
@@ -111,9 +155,9 @@ async function loadAll(characters) {
 }
 
 function parseSvg(svgText) {
-  const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml')
+  const doc   = new DOMParser().parseFromString(svgText, 'image/svg+xml')
   const svgEl = doc.querySelector('svg')
-  const viewBox = svgEl?.getAttribute('viewBox') ?? '0 0 109 109'
+  const viewBox        = svgEl?.getAttribute('viewBox') ?? '0 0 109 109'
   const groupTransform = svgEl?.querySelector('g')?.getAttribute('transform') ?? ''
 
   const groupMap = new Map()
@@ -123,7 +167,7 @@ function parseSvg(svgText) {
   }
 
   Array.from(doc.querySelectorAll('path')).forEach(p => {
-    const d = p.getAttribute('d')
+    const d  = p.getAttribute('d')
     if (!d || d.length <= 5) return
     const cp = p.getAttribute('clip-path')
     if (cp) {
@@ -137,14 +181,13 @@ function parseSvg(svgText) {
 
   const strokeGroups = [...groupMap.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([, g]) => ({
-      fills:   g.fills,
-      medians: g.medians,  // on garde tous les médians, mais on n'utilisera que le premier
-    }))
+    .map(([, g]) => ({ fills: g.fills, medians: g.medians }))
     .filter(g => g.fills.length > 0 && g.medians.length > 0)
 
   return { viewBox, groupTransform, strokeGroups }
 }
+
+// ── Comptage (ne compte que les chars non-manquants) ───────────────────────
 
 const totalStrokes = computed(() =>
   chars.value.reduce((sum, cd) => sum + cd.strokeGroups.length, 0)
@@ -165,33 +208,40 @@ function resolveGroup(globalIdx) {
   return null
 }
 
-function groupFill(ci, gIdx) {
-  return cumulative.value[ci] + gIdx < currentStroke.value ? 'var(--ink)' : '#e8e1d8'
+function segFill(ci, gIdx, sIdx) {
+  const globalPos = cumulative.value[ci] + gIdx
+  if (globalPos < currentStroke.value) return 'var(--ink)'
+  if (globalPos === currentStroke.value && sIdx < currentSubSeg.value) return 'var(--ink)'
+  return '#e8e1d8'
 }
 
-function goToFirst() { stopPlay(); currentStroke.value = 0 }
-function goToLast()  { stopPlay(); currentStroke.value = totalStrokes.value }
-function prevStroke() { stopPlay(); if (currentStroke.value > 0) currentStroke.value-- }
-function nextStroke() { stopPlay(); if (currentStroke.value < totalStrokes.value) currentStroke.value++ }
+// ── Contrôles ─────────────────────────────────────────────────────────────
+
+function goToFirst() { stopPlay(); currentStroke.value = 0; currentSubSeg.value = 0 }
+function goToLast()  { stopPlay(); currentStroke.value = totalStrokes.value; currentSubSeg.value = 0 }
+function prevStroke() { stopPlay(); if (currentStroke.value > 0) { currentStroke.value--; currentSubSeg.value = 0 } }
+function nextStroke() { stopPlay(); if (currentStroke.value < totalStrokes.value) { currentStroke.value++; currentSubSeg.value = 0 } }
 function togglePlay() { isPlaying.value ? stopPlay() : startPlay() }
 
 function startPlay() {
-  if (currentStroke.value >= totalStrokes.value) currentStroke.value = 0
+  if (currentStroke.value >= totalStrokes.value) { currentStroke.value = 0; currentSubSeg.value = 0 }
   isPlaying.value = true
   scheduleNext()
 }
 
 function stopPlay() {
   isPlaying.value = false
-  anim.value = { charIdx: -1, groupIdx: -1 }
-  if (playTimer) clearTimeout(playTimer)
-  if (animFrame) cancelAnimationFrame(animFrame)
+  anim.value = { charIdx: -1, groupIdx: -1, segIdx: -1 }
+  if (playTimer) { clearTimeout(playTimer);        playTimer = null }
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null }
 }
+
+// ── Moteur d'animation ────────────────────────────────────────────────────
 
 function scheduleNext() {
   if (!isPlaying.value || currentStroke.value >= totalStrokes.value) {
     isPlaying.value = false
-    anim.value = { charIdx: -1, groupIdx: -1 }
+    anim.value = { charIdx: -1, groupIdx: -1, segIdx: -1 }
     return
   }
 
@@ -199,37 +249,44 @@ function scheduleNext() {
   if (!pos) { stopPlay(); return }
 
   const { charIdx, groupIdx } = pos
-  const firstMedian = chars.value[charIdx].strokeGroups[groupIdx].medians[0]
-  if (!firstMedian) {
-    // Sécurité : si pas de médian, on passe au groupe suivant
+  const group  = chars.value[charIdx].strokeGroups[groupIdx]
+  const segIdx = currentSubSeg.value
+
+  if (segIdx >= group.medians.length) {
     currentStroke.value++
+    currentSubSeg.value = 0
+    anim.value = { charIdx: -1, groupIdx: -1, segIdx: -1 }
     if (isPlaying.value) playTimer = setTimeout(scheduleNext, 150)
     return
   }
 
+  const d   = group.medians[segIdx]
   const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-  tmp.setAttribute('d', firstMedian)
+  tmp.setAttribute('d', d)
   document.body.appendChild(tmp)
   const pathLen = Math.max(tmp.getTotalLength(), 1)
   document.body.removeChild(tmp)
 
-  anim.value = { charIdx, groupIdx }
-  animDashArray.value = pathLen
+  anim.value           = { charIdx, groupIdx, segIdx }
+  animDashArray.value  = pathLen
   animDashOffset.value = pathLen
 
-  const duration = Math.min(Math.max(pathLen * 4, 300), 1200)
+  const duration  = Math.min(Math.max(pathLen * 4, 300), 1200)
   const startTime = performance.now()
 
   function frame(now) {
-    const t = Math.min((now - startTime) / duration, 1)
+    const t     = Math.min((now - startTime) / duration, 1)
     const eased = 1 - Math.pow(1 - t, 2)
     animDashOffset.value = pathLen * (1 - eased)
     if (t < 1) {
       animFrame = requestAnimationFrame(frame)
     } else {
-      currentStroke.value++
-      anim.value = { charIdx: -1, groupIdx: -1 }
-      if (isPlaying.value) playTimer = setTimeout(scheduleNext, 150)
+      currentSubSeg.value++
+      anim.value = { charIdx: -1, groupIdx: -1, segIdx: -1 }
+      if (isPlaying.value) {
+        const isLastSeg = currentSubSeg.value >= group.medians.length
+        playTimer = setTimeout(scheduleNext, isLastSeg ? 150 : 0)
+      }
     }
   }
   animFrame = requestAnimationFrame(frame)
@@ -248,16 +305,45 @@ onUnmounted(() => stopPlay())
   border: 1px solid var(--paper-mid);
   border-radius: var(--radius);
   overflow: hidden;
+  flex-wrap: wrap;   /* les mots longs passent à la ligne si nécessaire */
 }
+
+/* Tailles fixes pour kana/kanji simples */
 .svg-row.chars-1 .svg-wrap { width: 200px; height: 200px; }
 .svg-row.chars-2 .svg-wrap { width: 107px; height: 107px; }
 .svg-row.chars-3 .svg-wrap { width:  80px; height:  80px; }
+
+/* Mode word : taille uniforme quel que soit le nombre de caractères */
+.svg-row.chars-4  .svg-wrap,
+.svg-row.chars-5  .svg-wrap,
+.svg-row.chars-6  .svg-wrap,
+.svg-row.chars-7  .svg-wrap,
+.svg-row.chars-8  .svg-wrap,
+.svg-row.chars-9  .svg-wrap,
+.svg-row.chars-10 .svg-wrap { width: 80px; height: 80px; }
+
+.svg-wrap { position: relative; flex-shrink: 0; }
 .svg-wrap + .svg-wrap { border-left: 1px solid var(--paper-mid); }
 .svg-canvas { width: 100%; height: 100%; display: block; }
 
+/* Caractère non-animatable (ponctuation, etc.) */
+.svg-wrap--error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 80px;
+  background: var(--paper-dark);
+}
+.svg-text-char {
+  font-size: 1.4rem;
+  color: var(--muted);
+  line-height: 1;
+}
+
 .svg-placeholder {
   display: flex; align-items: center; justify-content: center;
-  width: 200px; height: 200px;
+  min-width: 200px; height: 200px;
 }
 .placeholder-char { font-size: 4rem; line-height: 1; color: var(--paper-mid); }
 
@@ -277,4 +363,4 @@ onUnmounted(() => stopPlay())
 }
 .ctrl-play:hover:not(:disabled) { background: var(--vermilion); border-color: var(--vermilion); }
 .stroke-counter { font-size: 0.7rem; color: var(--muted); letter-spacing: 0.04em; }
-</style> 
+</style>
