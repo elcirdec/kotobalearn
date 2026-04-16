@@ -5,9 +5,9 @@
       <div v-if="loading" class="svg-placeholder">
         <span class="jp placeholder-char">{{ character }}</span>
       </div>
-      <div v-else-if="error" class="svg-placeholder">
-        <span class="jp placeholder-char faded">{{ character }}</span>
-        <span class="svg-error-msg">Tracé non disponible</span>
+      <div v-else-if="error" class="svg-placeholder static-fallback">
+        <span class="jp static-char">{{ character }}</span>
+        <span class="svg-error-msg">(tracé non disponible)</span>
       </div>
 
       <svg v-else
@@ -262,11 +262,25 @@ onUnmounted(() => stopPlay())
   line-height: 1;
   color: var(--paper-mid);
 }
-.placeholder-char.faded { opacity: 0.25; }
-.svg-error-msg {
-  font-size: 0.68rem;
+/* Fallback pour caractère sans tracé */
+.static-fallback {
+  background: white;
+  border: 1px solid var(--paper-mid);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.static-char {
+  font-size: 10rem;
+  color: var(--ink);
+  line-height: 1;
+  margin-bottom: 0.25rem; /* espace entre le caractère et le message */
+}
+.static-fallback .svg-error-msg {
+  font-size: 0.7rem;
   color: var(--muted);
-  letter-spacing: 0.04em;
+  text-align: center;
 }
 .svg-canvas {
   width: 100%;
